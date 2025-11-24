@@ -26,11 +26,11 @@
             5% { transform: translateY(-50px); opacity: 0; }
             10% { transform: translateY(50px); opacity: 0; }
             15% { transform: translateY(0); opacity: 1; }
-            /* Repeat cycles for a few seconds */
             100% { transform: translateY(0); opacity: 1; }
         }
         .spinning {
-            animation: spin-text 0.1s infinite cubic-bezier(0.42, 0, 0.58, 1);
+            /* Reduced animation complexity for better performance */
+            transition: transform 0.1s;
         }
     </style>
 </head>
@@ -40,16 +40,16 @@
         <!-- Header -->
         <header class="text-center mb-8">
             <h1 class="text-4xl font-bold text-christmas-red mb-2">Secret Santa Draw 🎁</h1>
-            <p class="text-gray-600" id="header-subtitle">Secure Draw - Firebase Auth</p>
+            <p class="text-gray-600" id="header-subtitle">Enrollment and Draw</p>
         </header>
 
         <!-- Loading Indicator -->
-        <div id="loading-indicator" class="hidden text-center p-4">
+        <div id="loading-indicator" class="text-center p-4">
             <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-christmas-green inline-block"></div>
-            <p class="mt-2 text-christmas-green">Loading authentication and draw state...</p>
+            <p class="mt-2 text-christmas-green">Initializing application...</p>
         </div>
 
-        <!-- Enrollment/Setup Area (Visible only for administrators or un-enrolled users) -->
+        <!-- Enrollment/Setup Area -->
         <div id="enrollment-area" class="space-y-4 p-6 bg-red-100 text-red-800 rounded-lg shadow-md hidden">
             <h2 class="text-xl font-bold">Enrollment Required</h2>
             <p class="text-sm">Please select your name to link it to your unique user account. **DO NOT** select another person's name!</p>
@@ -70,7 +70,7 @@
             <!-- Step 1: User Identity -->
             <div id="user-identity-area" class="bg-gray-50 p-4 rounded-lg shadow-inner text-center">
                 <h2 id="welcome-message" class="text-2xl font-bold text-christmas-green mb-1"></h2>
-                <p id="auth-status" class="text-sm mt-2 text-gray-500"></p>
+                <p id="auth-status" class="text-xs mt-2 text-gray-500"></p>
             </div>
 
             <!-- Step 2: Spin and Result -->
@@ -89,24 +89,18 @@
 
                 <div id="already-drawn-message" class="mt-8 p-4 bg-yellow-100 text-yellow-800 rounded-lg shadow-md hidden">
                     <p class="font-semibold">You have already drawn your Secret Santa!</p>
-                    <p class="text-sm mt-1">Please check the result box above.</p>
+                    <p class="text-sm mt-1">Check the result box above or reload the page.</p>
                 </div>
             </div>
 
             <!-- List of Participants (Always Visible) -->
             <div class="p-4 bg-gray-50 rounded-lg shadow-inner">
-                <p class="text-sm font-semibold text-christmas-green mb-2">Enrolled Participants (9 Total):</p>
+                <p class="text-sm font-semibold text-christmas-green mb-2">Enrolled Participants (<span id="participant-count">0</span> Total):</p>
                 <ul id="participant-list" class="flex flex-wrap gap-2 text-sm text-gray-700">
                     <!-- Names will be listed here -->
                 </ul>
             </div>
             
-            <!-- Admin Controls -->
-            <div class="pt-4 border-t border-gray-200 space-y-3">
-                <button id="reset-button" class="w-full text-xs text-gray-500 hover:text-red-500 transition duration-150 p-2 rounded-lg border border-gray-300 hover:border-red-500" disabled>
-                    [Admin] Reset All Data
-                </button>
-            </div>
         </div>
         
         <!-- General Message Box -->
@@ -117,28 +111,15 @@
         // Mandatory Firebase Imports
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, getDoc, onSnapshot, runTransaction, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-        import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, doc, setDoc, onSnapshot, runTransaction, updateDoc, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // Enable Firestore Debug Logging
         setLogLevel('Debug');
 
         // Global Canvas Variables (MANDATORY TO USE)
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        
-        // --- Hardcoded Firebase configuration as requested by the user for easy hosting. ---
-        const firebaseConfig = {
-            apiKey: "AIzaSyAJ9K9fQ0ThMB7aXB6qNHr3_yLUdqJgnCM",
-            authDomain: "my-chain-reaction-game.firebaseapp.com",
-            projectId: "my-chain-reaction-game",
-            storageBucket: "my-chain-reaction-game.appspot.com",
-            messagingSenderId: "32751418407",
-            appId: "1:32751418407:web:ff8244007ef2b099d56202"
-        };
+        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
         const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
-        
-        // --- Security Constant (Secret Key for client-side encryption) ---
-        const SECRET_KEY = appId + "_XMAS2025_V2"; 
         
         // --- Firebase Setup ---
         let app, db, auth, userId = null;
@@ -176,9 +157,9 @@
             resultBox: document.getElementById('result-box'),
             targetNameDisplay: document.getElementById('target-name-display'),
             participantList: document.getElementById('participant-list'),
+            participantCount: document.getElementById('participant-count'),
             alreadyDrawnMessage: document.getElementById('already-drawn-message'),
             authStatus: document.getElementById('auth-status'),
-            resetButton: document.getElementById('reset-button'),
         };
 
         // --- Paths ---
@@ -191,32 +172,6 @@
             // Private data path: /artifacts/{appId}/users/{userId}/secret_santa/assignment
             return doc(db, 'artifacts', appId, 'users', uid, 'secret_santa', 'assignment');
         }
-
-        // --- Encryption/Decryption Functions (XOR Cipher) ---
-        function xorEncrypt(text, key) {
-            let result = '';
-            for (let i = 0; i < text.length; i++) {
-                const charCode = text.charCodeAt(i) ^ key.charCodeAt(i % key.length);
-                result += String.fromCharCode(charCode);
-            }
-            return btoa(result); 
-        }
-
-        function xorDecrypt(encryptedText, key) {
-            try {
-                const decodedText = atob(encryptedText);
-                let result = '';
-                for (let i = 0; i < decodedText.length; i++) {
-                    const charCode = decodedText.charCodeAt(i) ^ key.charCodeAt(i % key.length);
-                    result += String.fromCharCode(charCode);
-                }
-                return result;
-            } catch (e) {
-                console.error("Decryption failed:", e);
-                return "DECRYPTION_FAILED";
-            }
-        }
-        // -----------------------------------------------------
 
         function showMessage(text, isError = false) {
             elements.messageBox.textContent = text;
@@ -246,21 +201,27 @@
         }
 
         function updateParticipantList() {
-            const enrolledNames = Object.values(currentDrawState.user_name_map);
+            const map = currentDrawState.user_name_map || {};
+            const enrolledNames = Object.values(map);
+            const totalEnrolled = enrolledNames.length;
+
+            elements.participantCount.textContent = totalEnrolled;
+
             elements.participantList.innerHTML = ALL_PARTICIPANTS.map(name => {
                 const isEnrolled = enrolledNames.includes(name);
+                // Highlight targets who have been assigned to someone
                 const drawnClass = currentDrawState.targets_assigned.includes(name) ? 'bg-yellow-200 text-yellow-800' : 'bg-christmas-green/10 text-christmas-green';
                 const baseClass = isEnrolled ? drawnClass : 'bg-gray-300 text-gray-600';
                 
-                return `<li class="px-3 py-1 ${baseClass} rounded-full text-xs font-medium">${name} ${isEnrolled ? '' : '(Pending Enrollment)'}</li>`;
+                return `<li class="px-3 py-1 ${baseClass} rounded-full text-xs font-medium">${name} ${isEnrolled ? '' : '(Pending)'}</li>`;
             }).join('');
         }
 
         async function initializeFirebase() {
             elements.loading.classList.remove('hidden');
             
-            if (!firebaseConfig.apiKey) {
-                showMessage("Firebase configuration is missing or invalid. Cannot initialize the app.", true);
+            if (Object.keys(firebaseConfig).length === 0) {
+                showMessage("Firebase configuration is missing. Cannot initialize the app.", true);
                 return;
             }
 
@@ -269,15 +230,17 @@
                 auth = getAuth(app);
                 db = getFirestore(app);
                 
-                // --- FIX: Bypassing custom token due to mismatch with hardcoded config ---
-                // The environment's initialAuthToken is for a different project.
-                // We always sign in anonymously to the user's hardcoded project.
-                await signInAnonymously(auth);
+                // Authenticate the user
+                if (initialAuthToken) {
+                    await signInWithCustomToken(auth, initialAuthToken);
+                } else {
+                    await signInAnonymously(auth);
+                }
                 
                 userId = auth.currentUser.uid;
                 
                 elements.authStatus.textContent = "Your Account ID: " + userId;
-                console.log("Firebase initialized. User ID:", userId);
+                elements.loading.classList.add('hidden');
 
                 // Start listening for public and private data
                 setupRealtimeListeners();
@@ -285,6 +248,7 @@
             } catch (error) {
                 console.error("Error during Firebase initialization or authentication:", error);
                 showMessage(`Authentication failed: ${error.message}. Check console for details.`, true);
+                elements.loading.classList.add('hidden');
             }
         }
         
@@ -297,39 +261,32 @@
             onSnapshot(publicRef, (docSnap) => {
                 if (docSnap.exists()) {
                     currentDrawState = docSnap.data();
-                    console.log("Public state updated:", currentDrawState);
                 } else {
-                    console.log("Public state missing. Initializing...");
+                    // Initialize if the document doesn't exist
                     setDoc(publicRef, initialPublicData);
                     currentDrawState = initialPublicData;
                 }
-                // Update UI based on public state (enrollment status, participant list)
                 handlePublicStateUpdate();
             }, (error) => {
                 console.error("Firestore public listen failed:", error);
-                showMessage("Real-time data synchronization failed.", true);
+                showMessage("Real-time public data synchronization failed.", true);
             });
             
-            // 2. Listen to Private Assignment (only visible to current user)
+            // 2. Listen to Private Assignment (only visible to current user based on security rules)
             onSnapshot(privateRef, (docSnap) => {
-                if (docSnap.exists() && currentDrawerName) {
-                    const data = docSnap.data();
+                // Only handle private state if we know the user is enrolled
+                if (currentDrawerName) {
+                    const data = docSnap.exists() ? docSnap.data() : {};
                     handlePrivateStateUpdate(data);
-                } else if (!docSnap.exists() && currentDrawerName) {
-                    // User is enrolled but hasn't drawn yet
-                    handlePrivateStateUpdate({});
                 }
             }, (error) => {
-                console.error("Firestore private listen failed:", error);
-                // This is normal if security rules prevent access for an unauthenticated user
+                // This is expected if the user hasn't drawn yet or security rules prevent reading
+                console.warn("Firestore private listen warning:", error.message);
             });
         }
         
         function handlePublicStateUpdate() {
-            elements.loading.classList.add('hidden');
-            
             const map = currentDrawState.user_name_map || {};
-            const enrolledUsers = Object.keys(map);
             currentDrawerName = map[userId] || null;
 
             updateParticipantList();
@@ -345,26 +302,16 @@
                 elements.mainContent.classList.add('hidden');
                 populateEnrollmentDropdown(map);
             }
-            
-            // Admin button control
-            elements.resetButton.disabled = currentDrawState.targets_assigned.length > 0;
         }
 
         function handlePrivateStateUpdate(privateData) {
             // This runs after public state ensures currentDrawerName is set
             if (!currentDrawerName) return; 
 
-            const encryptedTarget = privateData.target;
+            const target = privateData.target;
             
-            if (encryptedTarget) {
+            if (target) {
                 // Already drawn
-                const target = xorDecrypt(encryptedTarget, SECRET_KEY);
-                
-                if (target === "DECRYPTION_FAILED") {
-                    showMessage("Error: Failed to retrieve your secret assignment. Please contact admin.", true);
-                    return;
-                }
-
                 showResult(target);
                 elements.alreadyDrawnMessage.classList.remove('hidden');
                 elements.spinButton.textContent = "Drawing Complete";
@@ -372,6 +319,7 @@
             } else {
                 // Needs to draw
                 elements.resultBox.classList.add('hidden');
+                elements.targetNameDisplay.textContent = '???';
                 elements.alreadyDrawnMessage.classList.add('hidden');
                 
                 elements.spinButton.textContent = "Draw Your Secret Santa!";
@@ -402,7 +350,7 @@
             elements.enrollmentStatus.textContent = `Enrolling ${selectedName}...`;
 
             try {
-                // 1. Update the public map
+                // Update the public map
                 const publicRef = getPublicDocRef();
                 await updateDoc(publicRef, { 
                     user_name_map: {
@@ -411,8 +359,6 @@
                     }
                 });
                 
-                // 2. Set the local name (listener will handle UI update)
-                currentDrawerName = selectedName;
                 showMessage(`Successfully enrolled as ${selectedName}! You can now draw.`, false);
 
             } catch (error) {
@@ -442,40 +388,40 @@
             try {
                 const targetName = await runTransaction(db, async (transaction) => {
                     const publicSnap = await transaction.get(publicRef);
+                    const privateSnap = await transaction.get(privateRef);
+                    
                     if (!publicSnap.exists()) {
                         throw new Error("Draw data document does not exist. Please refresh.");
                     }
-                    
+                    if (privateSnap.exists() && privateSnap.data().target) {
+                        // Double check against private assignment. Should be handled by UI, but good to be safe.
+                        throw new Error("You have already drawn your target.");
+                    }
+
                     const publicData = publicSnap.data();
                     const targetsAssigned = publicData.targets_assigned || [];
 
-                    // Check if already drawn (based on private doc, which is not done here for security)
-                    // We rely on the UI state, but add a robust check here against the target array size
-                    
                     // Determine available targets: ALL_PARTICIPANTS - targets_assigned - drawerName
                     const availableTargets = ALL_PARTICIPANTS.filter(
                         name => name !== drawerName && !targetsAssigned.includes(name)
                     );
 
                     if (availableTargets.length === 0) {
-                        throw new Error("Assignment pool is empty or corrupted. Cannot draw.");
+                        throw new Error("Assignment pool is empty. Cannot draw.");
                     }
 
                     // 1. Randomly select the target
                     const randomIndex = Math.floor(Math.random() * availableTargets.length);
                     const newTargetName = availableTargets[randomIndex];
                     
-                    // 2. Encrypt the target name
-                    const encryptedTarget = xorEncrypt(newTargetName, SECRET_KEY);
-
-                    // 3. Update the public document: Mark the target as taken
+                    // 2. Update the public document: Mark the target as taken
                     transaction.update(publicRef, {
                         targets_assigned: [...targetsAssigned, newTargetName],
                     });
                     
-                    // 4. Create/Update the private assignment document: Store the encrypted target
+                    // 3. Create/Update the private assignment document: Store the target (relying on security rules for secrecy)
                     transaction.set(privateRef, { 
-                        target: encryptedTarget,
+                        target: newTargetName,
                         drawer: drawerName,
                         drawn_at: Date.now()
                     });
@@ -490,7 +436,9 @@
                 console.error("Transaction failed:", error);
                 let message = "Failed to complete the draw.";
                 if (error.message.includes("Assignment pool is empty")) {
-                    message = "Assignment pool error: Unable to find a valid recipient.";
+                    message = "Assignment pool is empty or corrupted. Contact admin.";
+                } else if (error.message.includes("already drawn")) {
+                    message = "You have already completed your draw.";
                 }
                 showMessage(message, true);
                 elements.spinButton.disabled = false;
@@ -502,7 +450,7 @@
             elements.resultBox.classList.remove('hidden');
             elements.spinButton.textContent = "Drawing...";
             
-            // Visual spin effect
+            // Start the visual spin effect
             elements.targetNameDisplay.classList.add('spinning');
 
             const SPIN_DURATION_MS = 3000;
@@ -520,39 +468,13 @@
                     clearInterval(interval);
                     elements.targetNameDisplay.classList.remove('spinning');
                     showResult(targetName);
-                    
-                    // onSnapshot listener will update UI based on successful save
+                    // onSnapshot listener will handle re-disabling the button and updating the final state
                 }
             }, 100);
         }
         
-        // --- Admin Functionality ---
-        async function resetDraw() {
-            // Using custom modal replacement for confirm()
-            if (!confirm("Are you sure you want to completely reset the Secret Santa draw? This will erase ALL ENROLLMENTS and ALL ASSIGNMENTS.")) {
-                return; 
-            }
-
-            elements.resetButton.disabled = true;
-            try {
-                // 1. Reset Public Data
-                await setDoc(getPublicDocRef(), initialPublicData);
-                
-                // NOTE: We rely on security rules to prevent reading/writing other users' private data.
-                // Resetting the public data is enough, as the new draw will overwrite the old map.
-                showMessage("The Secret Santa draw has been successfully reset! All users must re-enroll.", false);
-
-            } catch (error) {
-                console.error("Error resetting draw:", error);
-                showMessage("Failed to reset the draw in Firestore.", true);
-            } finally {
-                // onSnapshot will re-enable the button if the reset was successful
-            }
-        }
-
         // --- Event Listeners ---
         elements.spinButton.addEventListener('click', spinAndAssign);
-        elements.resetButton.addEventListener('click', resetDraw);
 
         // --- Initialization ---
         document.addEventListener('DOMContentLoaded', () => {
