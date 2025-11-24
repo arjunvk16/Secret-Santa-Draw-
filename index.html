@@ -29,7 +29,6 @@
             100% { transform: translateY(0); opacity: 1; }
         }
         .spinning {
-            /* Reduced animation complexity for better performance */
             transition: transform 0.1s;
         }
     </style>
@@ -95,7 +94,7 @@
 
             <!-- List of Participants (Always Visible) -->
             <div class="p-4 bg-gray-50 rounded-lg shadow-inner">
-                <p class="text-sm font-semibold text-christmas-green mb-2">Enrolled Participants (<span id="participant-count">0</span> Total):</p>
+                <p class="text-sm font-semibold text-christmas-green mb-2">Active Participants (<span id="participant-count">0</span> Total):</p>
                 <ul id="participant-list" class="flex flex-wrap gap-2 text-sm text-gray-700">
                     <!-- Names will be listed here -->
                 </ul>
@@ -110,7 +109,7 @@
     <script type="module">
         // Mandatory Firebase Imports
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, setDoc, onSnapshot, runTransaction, updateDoc, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // Enable Firestore Debug Logging
@@ -118,7 +117,6 @@
 
         // Global Canvas Variables (MANDATORY TO USE)
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        // Note: initialAuthToken is intentionally ignored below to resolve the auth/custom-token-mismatch error.
         
         // --- Hardcoded Firebase Configuration ---
         const firebaseConfig = {
@@ -133,22 +131,22 @@
         // --- Firebase Setup ---
         let app, db, auth, userId = null;
         
-        // The core participant list
-        const ALL_PARTICIPANTS = ["Arjun", "Alvin", "Shany", "Adarsh", "Gokul", "Vismaya", "Amal", "Aswin", "Ambady"];
+        // The master list of all possible participants (used as fallback/initialization)
+        const MASTER_PARTICIPANTS = ["Arjun", "Alvin", "Shany", "Adarsh", "Gokul", "Vismaya", "Amal", "Aswin", "Ambady"];
         
         // --- Identity Management ---
         let currentDrawerName = null; // Name of the participant associated with the current userId
         
-        // Initial public data structure
+        // Initial public data structure (used only if Firestore document doesn't exist)
         const initialPublicData = {
-            participants: ALL_PARTICIPANTS,
-            // Maps Firebase UID to participant name, used for enrollment tracking
-            user_name_map: {}, 
-            // List of participant names that have been assigned as targets (publicly visible)
-            targets_assigned: [], 
+            master_participants: MASTER_PARTICIPANTS, // The full list
+            active_participants: MASTER_PARTICIPANTS, // Default to all active
+            user_name_map: {}, // Maps Firebase UID to participant name
+            targets_assigned: [], // List of participant names already drawn as targets
         };
 
         let currentDrawState = {
+            active_participants: [],
             user_name_map: {},
             targets_assigned: [],
         };
@@ -195,9 +193,10 @@
         function populateEnrollmentDropdown(enrolledNames) {
             elements.enrollmentSelect.innerHTML = '<option value="" disabled selected>Select Your Name</option>';
             
-            // Only show names that have NOT been enrolled yet
+            // Filter against the ACTIVE list of participants only
             const enrolledValues = Object.values(enrolledNames);
-            const availableNames = ALL_PARTICIPANTS.filter(name => !enrolledValues.includes(name));
+            const activeParticipants = currentDrawState.active_participants || [];
+            const availableNames = activeParticipants.filter(name => !enrolledValues.includes(name));
 
             availableNames.forEach(name => {
                 const option = document.createElement('option');
@@ -207,16 +206,20 @@
             });
             
             elements.enrollButton.disabled = elements.enrollmentSelect.value === "";
+            
+            if (activeParticipants.length === 0) {
+                 showMessage("The administrator has not selected any active participants yet. Check back later!", false);
+            }
         }
 
         function updateParticipantList() {
             const map = currentDrawState.user_name_map || {};
             const enrolledNames = Object.values(map);
-            const totalEnrolled = enrolledNames.length;
+            const activeParticipants = currentDrawState.active_participants || [];
 
-            elements.participantCount.textContent = totalEnrolled;
+            elements.participantCount.textContent = activeParticipants.length;
 
-            elements.participantList.innerHTML = ALL_PARTICIPANTS.map(name => {
+            elements.participantList.innerHTML = activeParticipants.map(name => {
                 const isEnrolled = enrolledNames.includes(name);
                 // Highlight targets who have been assigned to someone
                 const drawnClass = currentDrawState.targets_assigned.includes(name) ? 'bg-yellow-200 text-yellow-800' : 'bg-christmas-green/10 text-christmas-green';
@@ -239,7 +242,6 @@
                 auth = getAuth(app);
                 db = getFirestore(app);
                 
-                // FIX: Always sign in anonymously to use the hardcoded Firebase project
                 await signInAnonymously(auth);
                 
                 userId = auth.currentUser.uid;
@@ -247,7 +249,6 @@
                 elements.authStatus.textContent = "Your Account ID: " + userId;
                 elements.loading.classList.add('hidden');
 
-                // Start listening for public and private data
                 setupRealtimeListeners();
 
             } catch (error) {
@@ -267,9 +268,12 @@
                 if (docSnap.exists()) {
                     currentDrawState = docSnap.data();
                 } else {
-                    // Initialize if the document doesn't exist
                     setDoc(publicRef, initialPublicData);
                     currentDrawState = initialPublicData;
+                }
+                // Ensure active_participants exists and is an array, default to master if needed
+                if (!Array.isArray(currentDrawState.active_participants) || currentDrawState.active_participants.length === 0) {
+                    currentDrawState.active_participants = currentDrawState.master_participants || MASTER_PARTICIPANTS;
                 }
                 handlePublicStateUpdate();
             }, (error) => {
@@ -277,15 +281,13 @@
                 showMessage("Real-time public data synchronization failed.", true);
             });
             
-            // 2. Listen to Private Assignment (only visible to current user based on security rules)
+            // 2. Listen to Private Assignment
             onSnapshot(privateRef, (docSnap) => {
-                // Only handle private state if we know the user is enrolled
                 if (currentDrawerName) {
                     const data = docSnap.exists() ? docSnap.data() : {};
                     handlePrivateStateUpdate(data);
                 }
             }, (error) => {
-                // This is expected if the user hasn't drawn yet or security rules prevent reading
                 console.warn("Firestore private listen warning:", error.message);
             });
         }
@@ -296,13 +298,19 @@
 
             updateParticipantList();
 
+            if (currentDrawState.active_participants.length === 0) {
+                elements.enrollmentArea.classList.add('hidden');
+                elements.mainContent.classList.add('hidden');
+                showMessage("The admin has not started the draw yet. Please wait!", false);
+                return;
+            }
+
+
             if (currentDrawerName) {
-                // User is enrolled - show main content
                 elements.enrollmentArea.classList.add('hidden');
                 elements.mainContent.classList.remove('hidden');
                 elements.welcomeMessage.textContent = `Welcome, ${currentDrawerName}!`;
             } else {
-                // User is NOT enrolled - show enrollment area
                 elements.enrollmentArea.classList.remove('hidden');
                 elements.mainContent.classList.add('hidden');
                 populateEnrollmentDropdown(map);
@@ -310,26 +318,31 @@
         }
 
         function handlePrivateStateUpdate(privateData) {
-            // This runs after public state ensures currentDrawerName is set
             if (!currentDrawerName) return; 
 
             const target = privateData.target;
             
             if (target) {
-                // Already drawn
                 showResult(target);
                 elements.alreadyDrawnMessage.classList.remove('hidden');
                 elements.spinButton.textContent = "Drawing Complete";
                 elements.spinButton.disabled = true;
             } else {
-                // Needs to draw
                 elements.resultBox.classList.add('hidden');
                 elements.targetNameDisplay.textContent = '???';
                 elements.alreadyDrawnMessage.classList.add('hidden');
                 
                 elements.spinButton.textContent = "Draw Your Secret Santa!";
-                // Enable button only if enrolled AND assignment is not set
-                elements.spinButton.disabled = !currentDrawerName; 
+                // Check if the current user is in the active participant list
+                const isUserActive = currentDrawState.active_participants.includes(currentDrawerName);
+                
+                // Button is enabled only if enrolled AND active
+                elements.spinButton.disabled = !currentDrawerName || !isUserActive;
+                if (!isUserActive && currentDrawerName) {
+                    showMessage("You are currently not included in the active draw pool. Contact the administrator.", true);
+                } else if (isUserActive) {
+                    hideMessage();
+                }
             }
         }
 
@@ -355,7 +368,11 @@
             elements.enrollmentStatus.textContent = `Enrolling ${selectedName}...`;
 
             try {
-                // Update the public map
+                // Check if the selected name is actually in the current active list before enrolling
+                if (!currentDrawState.active_participants.includes(selectedName)) {
+                     throw new Error("This user is not currently active in the draw pool.");
+                }
+                
                 const publicRef = getPublicDocRef();
                 await updateDoc(publicRef, { 
                     user_name_map: {
@@ -368,7 +385,7 @@
 
             } catch (error) {
                 console.error("Enrollment failed:", error);
-                showMessage("Failed to save enrollment data.", true);
+                showMessage(`Enrollment failed: ${error.message}`, true);
             } finally {
                 elements.enrollButton.disabled = false;
                 elements.enrollmentStatus.classList.add('hidden');
@@ -378,8 +395,8 @@
         // --- Draw Logic ---
         async function spinAndAssign() {
             const drawerName = currentDrawerName;
-            if (!drawerName) {
-                showMessage("Please enroll your account first.", true);
+            if (!drawerName || !currentDrawState.active_participants.includes(drawerName)) {
+                showMessage("You are not authorized or active for the draw.", true);
                 return;
             }
 
@@ -399,15 +416,17 @@
                         throw new Error("Draw data document does not exist. Please refresh.");
                     }
                     if (privateSnap.exists() && privateSnap.data().target) {
-                        // Double check against private assignment. Should be handled by UI, but good to be safe.
                         throw new Error("You have already drawn your target.");
                     }
 
                     const publicData = publicSnap.data();
                     const targetsAssigned = publicData.targets_assigned || [];
 
-                    // Determine available targets: ALL_PARTICIPANTS - targets_assigned - drawerName
-                    const availableTargets = ALL_PARTICIPANTS.filter(
+                    // The active draw pool is now based on the list set by the admin
+                    const currentActiveParticipants = publicData.active_participants || [];
+
+                    // Determine available targets: Active Participants - targets_assigned - drawerName
+                    const availableTargets = currentActiveParticipants.filter(
                         name => name !== drawerName && !targetsAssigned.includes(name)
                     );
 
@@ -424,7 +443,7 @@
                         targets_assigned: [...targetsAssigned, newTargetName],
                     });
                     
-                    // 3. Create/Update the private assignment document: Store the target (relying on security rules for secrecy)
+                    // 3. Create/Update the private assignment document
                     transaction.set(privateRef, { 
                         target: newTargetName,
                         drawer: drawerName,
@@ -441,7 +460,7 @@
                 console.error("Transaction failed:", error);
                 let message = "Failed to complete the draw.";
                 if (error.message.includes("Assignment pool is empty")) {
-                    message = "Assignment pool is empty or corrupted. Contact admin.";
+                    message = "Assignment pool is empty. All active users have drawn or been drawn.";
                 } else if (error.message.includes("already drawn")) {
                     message = "You have already completed your draw.";
                 }
@@ -451,11 +470,15 @@
         }
         
         function animateSpin(targetName) {
-            elements.targetNameDisplay.textContent = ALL_PARTICIPANTS[0];
+            // Use the active list for the spin animation if possible
+            const animationNames = currentDrawState.active_participants.length > 0 ? 
+                                   currentDrawState.active_participants : 
+                                   MASTER_PARTICIPANTS;
+
+            elements.targetNameDisplay.textContent = animationNames[0];
             elements.resultBox.classList.remove('hidden');
             elements.spinButton.textContent = "Drawing...";
             
-            // Start the visual spin effect
             elements.targetNameDisplay.classList.add('spinning');
 
             const SPIN_DURATION_MS = 3000;
@@ -465,15 +488,12 @@
                 const elapsed = Date.now() - start;
                 
                 if (elapsed < SPIN_DURATION_MS) {
-                    // Update text with a random name from all participants
-                    const randomIndex = Math.floor(Math.random() * ALL_PARTICIPANTS.length);
-                    elements.targetNameDisplay.textContent = ALL_PARTICIPANTS[randomIndex];
+                    const randomIndex = Math.floor(Math.random() * animationNames.length);
+                    elements.targetNameDisplay.textContent = animationNames[randomIndex];
                 } else {
-                    // End the spin
                     clearInterval(interval);
                     elements.targetNameDisplay.classList.remove('spinning');
                     showResult(targetName);
-                    // onSnapshot listener will handle re-disabling the button and updating the final state
                 }
             }, 100);
         }
