@@ -118,8 +118,17 @@
 
         // Global Canvas Variables (MANDATORY TO USE)
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
-        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+        // Note: initialAuthToken is intentionally ignored below to resolve the auth/custom-token-mismatch error.
+        
+        // --- Hardcoded Firebase Configuration ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyAJ9K9fQ0ThMB7aXB6qNHr3_yLUdqJgnCM",
+            authDomain: "my-chain-reaction-game.firebaseapp.com",
+            projectId: "my-chain-reaction-game",
+            storageBucket: "my-chain-reaction-game.appspot.com",
+            messagingSenderId: "32751418407",
+            appId: "1:32751418407:web:ff8244007ef2b099d56202"
+        };
         
         // --- Firebase Setup ---
         let app, db, auth, userId = null;
@@ -230,12 +239,8 @@
                 auth = getAuth(app);
                 db = getFirestore(app);
                 
-                // Authenticate the user
-                if (initialAuthToken) {
-                    await signInWithCustomToken(auth, initialAuthToken);
-                } else {
-                    await signInAnonymously(auth);
-                }
+                // FIX: Always sign in anonymously to use the hardcoded Firebase project
+                await signInAnonymously(auth);
                 
                 userId = auth.currentUser.uid;
                 
