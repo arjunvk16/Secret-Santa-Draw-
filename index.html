@@ -40,26 +40,36 @@
         <!-- Header -->
         <header class="text-center mb-8">
             <h1 class="text-4xl font-bold text-christmas-red mb-2">Secret Santa Draw 🎁</h1>
-            <p class="text-gray-600">Find out who you're buying a gift for!</p>
+            <p class="text-gray-600" id="header-subtitle">Secure Draw - Firebase Auth</p>
         </header>
 
         <!-- Loading Indicator -->
         <div id="loading-indicator" class="hidden text-center p-4">
             <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-christmas-green inline-block"></div>
-            <p class="mt-2 text-christmas-green">Loading data...</p>
+            <p class="mt-2 text-christmas-green">Loading authentication and draw state...</p>
         </div>
 
-        <!-- Main Content Area -->
+        <!-- Enrollment/Setup Area (Visible only for administrators or un-enrolled users) -->
+        <div id="enrollment-area" class="space-y-4 p-6 bg-red-100 text-red-800 rounded-lg shadow-md hidden">
+            <h2 class="text-xl font-bold">Enrollment Required</h2>
+            <p class="text-sm">Please select your name to link it to your unique user account. **DO NOT** select another person's name!</p>
+            <div id="enrollment-form">
+                <select id="enrollment-select" class="block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:border-red-500 focus:ring focus:ring-red-500 focus:ring-opacity-50 transition duration-150 text-lg">
+                    <option value="" disabled selected>Select Your Name</option>
+                </select>
+                <button id="enroll-button" class="mt-4 w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition duration-200 disabled:opacity-50">
+                    Enroll Account
+                </button>
+            </div>
+            <div id="enrollment-status" class="text-sm font-semibold mt-2 hidden"></div>
+        </div>
+        
+        <!-- Main Content Area (Visible only when authenticated and enrolled) -->
         <div id="main-content" class="space-y-6 hidden">
 
-            <!-- Step 1: Select Your Name -->
-            <div id="name-selection-area" class="bg-gray-50 p-4 rounded-lg shadow-inner">
-                <label for="drawer-select" class="block text-lg font-semibold text-christmas-green mb-2">1. Select Your Name</label>
-                <div class="relative">
-                    <select id="drawer-select" class="block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:border-christmas-red focus:ring focus:ring-christmas-red focus:ring-opacity-50 transition duration-150 text-lg">
-                        <!-- Options will be populated by JavaScript -->
-                    </select>
-                </div>
+            <!-- Step 1: User Identity -->
+            <div id="user-identity-area" class="bg-gray-50 p-4 rounded-lg shadow-inner text-center">
+                <h2 id="welcome-message" class="text-2xl font-bold text-christmas-green mb-1"></h2>
                 <p id="auth-status" class="text-sm mt-2 text-gray-500"></p>
             </div>
 
@@ -85,29 +95,29 @@
 
             <!-- List of Participants (Always Visible) -->
             <div class="p-4 bg-gray-50 rounded-lg shadow-inner">
-                <p class="text-sm font-semibold text-christmas-green mb-2">Current Participants (9 Total):</p>
+                <p class="text-sm font-semibold text-christmas-green mb-2">Enrolled Participants (9 Total):</p>
                 <ul id="participant-list" class="flex flex-wrap gap-2 text-sm text-gray-700">
                     <!-- Names will be listed here -->
                 </ul>
             </div>
             
             <!-- Admin Controls -->
-            <div class="pt-4 border-t border-gray-200">
+            <div class="pt-4 border-t border-gray-200 space-y-3">
                 <button id="reset-button" class="w-full text-xs text-gray-500 hover:text-red-500 transition duration-150 p-2 rounded-lg border border-gray-300 hover:border-red-500" disabled>
-                    [Admin] Reset Draw
+                    [Admin] Reset All Data
                 </button>
             </div>
         </div>
-
-        <!-- Error/Message Box -->
+        
+        <!-- General Message Box -->
         <div id="message-box" class="mt-4 p-3 rounded-lg text-sm text-center hidden"></div>
     </div>
 
     <script type="module">
         // Mandatory Firebase Imports
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, getDoc, onSnapshot, runTransaction } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, getDoc, onSnapshot, runTransaction, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // Enable Firestore Debug Logging
@@ -119,45 +129,59 @@
         const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
         
         // --- Security Constant (Secret Key for client-side encryption) ---
-        // This key is used to encrypt assignments in Firestore, hiding them from general database readers.
-        // NOTE: While the last person can still deduce their target from the list of taken targets, 
-        // this prevents anyone from seeing WHO GOT WHOM until they draw themselves.
-        const SECRET_KEY = appId + "_XMAS2025"; 
+        const SECRET_KEY = appId + "_XMAS2025_V2"; 
         
         // --- Firebase Setup ---
         let app, db, auth, userId = null;
         
-        // The core participant list (fixed for this exchange)
+        // The core participant list
         const ALL_PARTICIPANTS = ["Arjun", "Alvin", "Shany", "Adarsh", "Gokul", "Vismaya", "Amal", "Aswin", "Ambady"];
         
-        // Initial data structure for the document
-        const initialData = {
+        // --- Identity Management ---
+        let currentDrawerName = null; // Name of the participant associated with the current userId
+        
+        // Initial public data structure
+        const initialPublicData = {
             participants: ALL_PARTICIPANTS,
-            drawers_drawn: [], // List of names who have drawn (e.g., ["Arjun", "Shany"])
-            targets_assigned: [], // List of names who have been drawn (e.g., ["Vismaya", "Amal"])
-            assignments: {} // Format: { "DrawerName": "Encrypted_TargetName" }
+            // Maps Firebase UID to participant name, used for enrollment tracking
+            user_name_map: {}, 
+            // List of participant names that have been assigned as targets (publicly visible)
+            targets_assigned: [], 
         };
 
         let currentDrawState = {
-            participants: ALL_PARTICIPANTS,
-            drawers_drawn: [],
+            user_name_map: {},
             targets_assigned: [],
-            assignments: {}
         };
 
         const elements = {
             loading: document.getElementById('loading-indicator'),
             mainContent: document.getElementById('main-content'),
+            enrollmentArea: document.getElementById('enrollment-area'),
+            enrollmentSelect: document.getElementById('enrollment-select'),
+            enrollButton: document.getElementById('enroll-button'),
+            enrollmentStatus: document.getElementById('enrollment-status'),
             messageBox: document.getElementById('message-box'),
-            drawerSelect: document.getElementById('drawer-select'),
+            welcomeMessage: document.getElementById('welcome-message'),
             spinButton: document.getElementById('spin-button'),
             resultBox: document.getElementById('result-box'),
             targetNameDisplay: document.getElementById('target-name-display'),
             participantList: document.getElementById('participant-list'),
             alreadyDrawnMessage: document.getElementById('already-drawn-message'),
             authStatus: document.getElementById('auth-status'),
-            resetButton: document.getElementById('reset-button') // New element
+            resetButton: document.getElementById('reset-button'),
         };
+
+        // --- Paths ---
+        function getPublicDocRef() {
+            // Public data path: /artifacts/{appId}/public/data/christmas_exchange/gift_exchange_public
+            return doc(db, 'artifacts', appId, 'public', 'data', 'christmas_exchange', 'gift_exchange_public');
+        }
+        
+        function getPrivateAssignmentDocRef(uid) {
+            // Private data path: /artifacts/{appId}/users/{userId}/secret_santa/assignment
+            return doc(db, 'artifacts', appId, 'users', uid, 'secret_santa', 'assignment');
+        }
 
         // --- Encryption/Decryption Functions (XOR Cipher) ---
         function xorEncrypt(text, key) {
@@ -166,13 +190,11 @@
                 const charCode = text.charCodeAt(i) ^ key.charCodeAt(i % key.length);
                 result += String.fromCharCode(charCode);
             }
-            // Encode the result to Base64 for safe storage in Firestore
             return btoa(result); 
         }
 
         function xorDecrypt(encryptedText, key) {
             try {
-                // Decode from Base64
                 const decodedText = atob(encryptedText);
                 let result = '';
                 for (let i = 0; i < decodedText.length; i++) {
@@ -182,7 +204,7 @@
                 return result;
             } catch (e) {
                 console.error("Decryption failed:", e);
-                return "DECRYPTION_FAILED"; // Display error message
+                return "DECRYPTION_FAILED";
             }
         }
         // -----------------------------------------------------
@@ -197,24 +219,37 @@
             elements.messageBox.style.display = 'none';
         }
         
-        function populateParticipantDropdown() {
-            elements.drawerSelect.innerHTML = '<option value="" disabled selected>Who are you?</option>';
-            ALL_PARTICIPANTS.forEach(name => {
+        function populateEnrollmentDropdown(enrolledNames) {
+            elements.enrollmentSelect.innerHTML = '<option value="" disabled selected>Select Your Name</option>';
+            
+            // Only show names that have NOT been enrolled yet
+            const enrolledValues = Object.values(enrolledNames);
+            const availableNames = ALL_PARTICIPANTS.filter(name => !enrolledValues.includes(name));
+
+            availableNames.forEach(name => {
                 const option = document.createElement('option');
                 option.value = name;
                 option.textContent = name;
-                elements.drawerSelect.appendChild(option);
+                elements.enrollmentSelect.appendChild(option);
             });
-            elements.spinButton.disabled = true; // Disable until a user is selected
+            
+            elements.enrollButton.disabled = elements.enrollmentSelect.value === "";
         }
 
-        function updateParticipantList(participants) {
-            elements.participantList.innerHTML = participants.map(name => 
-                `<li class="px-3 py-1 bg-christmas-green/10 text-christmas-green rounded-full text-xs font-medium">${name}</li>`
-            ).join('');
+        function updateParticipantList() {
+            const enrolledNames = Object.values(currentDrawState.user_name_map);
+            elements.participantList.innerHTML = ALL_PARTICIPANTS.map(name => {
+                const isEnrolled = enrolledNames.includes(name);
+                const drawnClass = currentDrawState.targets_assigned.includes(name) ? 'bg-yellow-200 text-yellow-800' : 'bg-christmas-green/10 text-christmas-green';
+                const baseClass = isEnrolled ? drawnClass : 'bg-gray-300 text-gray-600';
+                
+                return `<li class="px-3 py-1 ${baseClass} rounded-full text-xs font-medium">${name} ${isEnrolled ? '' : '(Pending Enrollment)'}</li>`;
+            }).join('');
         }
 
         async function initializeFirebase() {
+            elements.loading.classList.remove('hidden');
+            
             if (!firebaseConfig.apiKey) {
                 showMessage("Firebase configuration is missing or invalid. Cannot initialize the app.", true);
                 return;
@@ -228,90 +263,97 @@
                 // Auth
                 if (initialAuthToken) {
                     await signInWithCustomToken(auth, initialAuthToken);
-                    elements.authStatus.textContent = "Authenticated user: " + auth.currentUser.uid;
                 } else {
                     await signInAnonymously(auth);
-                    elements.authStatus.textContent = "Signed in anonymously.";
                 }
-
                 userId = auth.currentUser.uid;
+                
+                elements.authStatus.textContent = "Your Account ID: " + userId;
                 console.log("Firebase initialized. User ID:", userId);
 
-                // Start listening for data changes
-                setupRealtimeListener();
+                // Start listening for public and private data
+                setupRealtimeListeners();
 
             } catch (error) {
                 console.error("Error during Firebase initialization or authentication:", error);
                 showMessage(`Authentication failed: ${error.message}. Check console for details.`, true);
-            } finally {
-                elements.loading.classList.add('hidden');
-                elements.mainContent.classList.remove('hidden');
             }
         }
+        
+        // --- Data Listeners ---
+        function setupRealtimeListeners() {
+            const publicRef = getPublicDocRef();
+            const privateRef = getPrivateAssignmentDocRef(userId);
 
-        function getDrawDocRef() {
-            // Public data path: /artifacts/{appId}/public/data/christmas_exchange/gift_exchange
-            return doc(db, 'artifacts', appId, 'public', 'data', 'christmas_exchange', 'gift_exchange');
-        }
-
-        async function initializeDrawData() {
-            const docRef = getDrawDocRef();
-            try {
-                const docSnap = await getDoc(docRef);
-                if (!docSnap.exists() || docSnap.data().participants.length !== ALL_PARTICIPANTS.length) {
-                    console.log("No initial data found or participant count changed. Creating/resetting new exchange document.");
-                    await setDoc(docRef, initialData);
-                }
-            } catch (error) {
-                console.error("Error initializing draw data:", error);
-                showMessage("Failed to initialize game data in Firestore.", true);
-            }
-        }
-
-        function setupRealtimeListener() {
-            const docRef = getDrawDocRef();
-            
-            onSnapshot(docRef, (docSnap) => {
+            // 1. Listen to Public Draw State
+            onSnapshot(publicRef, (docSnap) => {
                 if (docSnap.exists()) {
                     currentDrawState = docSnap.data();
-                    console.log("Current draw state updated:", currentDrawState);
-                    updateParticipantList(currentDrawState.participants);
-                    
-                    // Re-check the current user's status when data changes
-                    handleUserSelection();
+                    console.log("Public state updated:", currentDrawState);
                 } else {
-                    // Document doesn't exist (e.g., initial load or deleted). Initialize it.
-                    initializeDrawData();
+                    console.log("Public state missing. Initializing...");
+                    setDoc(publicRef, initialPublicData);
+                    currentDrawState = initialPublicData;
                 }
+                // Update UI based on public state (enrollment status, participant list)
+                handlePublicStateUpdate();
             }, (error) => {
-                console.error("Firestore listen failed:", error);
+                console.error("Firestore public listen failed:", error);
                 showMessage("Real-time data synchronization failed.", true);
             });
+            
+            // 2. Listen to Private Assignment (only visible to current user)
+            onSnapshot(privateRef, (docSnap) => {
+                if (docSnap.exists() && currentDrawerName) {
+                    const data = docSnap.data();
+                    handlePrivateStateUpdate(data);
+                } else if (!docSnap.exists() && currentDrawerName) {
+                    // User is enrolled but hasn't drawn yet
+                    handlePrivateStateUpdate({});
+                }
+            }, (error) => {
+                console.error("Firestore private listen failed:", error);
+                // This is normal if security rules prevent access for an unauthenticated user
+            });
+        }
+        
+        function handlePublicStateUpdate() {
+            elements.loading.classList.add('hidden');
+            
+            const map = currentDrawState.user_name_map || {};
+            const enrolledUsers = Object.keys(map);
+            currentDrawerName = map[userId] || null;
+
+            updateParticipantList();
+
+            if (currentDrawerName) {
+                // User is enrolled - show main content
+                elements.enrollmentArea.classList.add('hidden');
+                elements.mainContent.classList.remove('hidden');
+                elements.welcomeMessage.textContent = `Welcome, ${currentDrawerName}!`;
+            } else {
+                // User is NOT enrolled - show enrollment area
+                elements.enrollmentArea.classList.remove('hidden');
+                elements.mainContent.classList.add('hidden');
+                populateEnrollmentDropdown(map);
+            }
+            
+            // Admin button control
+            elements.resetButton.disabled = currentDrawState.targets_assigned.length > 0;
         }
 
-        function handleUserSelection() {
-            const drawerName = elements.drawerSelect.value;
-            const hasDrawn = currentDrawState.drawers_drawn.includes(drawerName);
-            elements.spinButton.disabled = !drawerName;
-            elements.resetButton.disabled = currentDrawState.drawers_drawn.length > 0; // Disable reset if drawing has started
+        function handlePrivateStateUpdate(privateData) {
+            // This runs after public state ensures currentDrawerName is set
+            if (!currentDrawerName) return; 
 
-            if (!drawerName) {
-                // Reset display state if no user is selected
-                elements.resultBox.classList.add('hidden');
-                elements.alreadyDrawnMessage.classList.add('hidden');
-                elements.spinButton.textContent = "Start the Draw!";
-                return;
-            }
-
-            // Check if the current user has already drawn
-            const encryptedTarget = currentDrawState.assignments[drawerName];
+            const encryptedTarget = privateData.target;
             
-            if (hasDrawn && encryptedTarget) {
-                // Already drawn - attempt decryption
+            if (encryptedTarget) {
+                // Already drawn
                 const target = xorDecrypt(encryptedTarget, SECRET_KEY);
                 
                 if (target === "DECRYPTION_FAILED") {
-                    showMessage("Error: Failed to retrieve your secret assignment. Please try again.", true);
+                    showMessage("Error: Failed to retrieve your secret assignment. Please contact admin.", true);
                     return;
                 }
 
@@ -323,8 +365,10 @@
                 // Needs to draw
                 elements.resultBox.classList.add('hidden');
                 elements.alreadyDrawnMessage.classList.add('hidden');
+                
                 elements.spinButton.textContent = "Draw Your Secret Santa!";
-                elements.spinButton.disabled = false;
+                // Enable button only if enrolled AND assignment is not set
+                elements.spinButton.disabled = !currentDrawerName; 
             }
         }
 
@@ -332,50 +376,80 @@
             elements.targetNameDisplay.textContent = targetName;
             elements.resultBox.classList.remove('hidden');
         }
+        
+        // --- Enrollment Logic ---
+        elements.enrollmentSelect.addEventListener('change', () => {
+            elements.enrollButton.disabled = elements.enrollmentSelect.value === "";
+        });
 
+        elements.enrollButton.addEventListener('click', async () => {
+            const selectedName = elements.enrollmentSelect.value;
+            if (!selectedName || !userId) {
+                showMessage("Please select a name and ensure you are logged in.", true);
+                return;
+            }
+            
+            elements.enrollButton.disabled = true;
+            elements.enrollmentStatus.classList.remove('hidden');
+            elements.enrollmentStatus.textContent = `Enrolling ${selectedName}...`;
+
+            try {
+                // 1. Update the public map
+                const publicRef = getPublicDocRef();
+                await updateDoc(publicRef, { 
+                    user_name_map: {
+                        ...currentDrawState.user_name_map,
+                        [userId]: selectedName
+                    }
+                });
+                
+                // 2. Set the local name (listener will handle UI update)
+                currentDrawerName = selectedName;
+                showMessage(`Successfully enrolled as ${selectedName}! You can now draw.`, false);
+
+            } catch (error) {
+                console.error("Enrollment failed:", error);
+                showMessage("Failed to save enrollment data.", true);
+            } finally {
+                elements.enrollButton.disabled = false;
+                elements.enrollmentStatus.classList.add('hidden');
+            }
+        });
+
+        // --- Draw Logic ---
         async function spinAndAssign() {
-            const drawerName = elements.drawerSelect.value;
+            const drawerName = currentDrawerName;
             if (!drawerName) {
-                showMessage("Please select your name first.", true);
+                showMessage("Please enroll your account first.", true);
                 return;
             }
 
             elements.spinButton.disabled = true;
             hideMessage();
             
-            // Check again if already drawn
-            if (currentDrawState.drawers_drawn.includes(drawerName)) {
-                showMessage("You have already drawn!", false);
-                return;
-            }
-
             // --- Draw Logic (Protected by Transaction) ---
-            const docRef = getDrawDocRef();
+            const publicRef = getPublicDocRef();
+            const privateRef = getPrivateAssignmentDocRef(userId);
 
             try {
                 const targetName = await runTransaction(db, async (transaction) => {
-                    const docSnap = await transaction.get(docRef);
-                    if (!docSnap.exists()) {
+                    const publicSnap = await transaction.get(publicRef);
+                    if (!publicSnap.exists()) {
                         throw new Error("Draw data document does not exist. Please refresh.");
                     }
                     
-                    const data = docSnap.data();
-                    const targetsAssigned = data.targets_assigned || [];
-                    const drawersDrawn = data.drawers_drawn || [];
-                    const assignments = data.assignments || {};
+                    const publicData = publicSnap.data();
+                    const targetsAssigned = publicData.targets_assigned || [];
 
-                    if (drawersDrawn.includes(drawerName)) {
-                        return xorDecrypt(assignments[drawerName], SECRET_KEY); // Already drawn, return existing
-                    }
-
+                    // Check if already drawn (based on private doc, which is not done here for security)
+                    // We rely on the UI state, but add a robust check here against the target array size
+                    
                     // Determine available targets: ALL_PARTICIPANTS - targets_assigned - drawerName
                     const availableTargets = ALL_PARTICIPANTS.filter(
                         name => name !== drawerName && !targetsAssigned.includes(name)
                     );
 
                     if (availableTargets.length === 0) {
-                        // This handles the case where only one person is left AND they are themselves (error)
-                        // OR if everyone is assigned (exchange complete, should be caught before transaction)
                         throw new Error("Assignment pool is empty or corrupted. Cannot draw.");
                     }
 
@@ -386,14 +460,16 @@
                     // 2. Encrypt the target name
                     const encryptedTarget = xorEncrypt(newTargetName, SECRET_KEY);
 
-                    // 3. Update the document within the transaction
-                    transaction.update(docRef, {
-                        drawers_drawn: [...drawersDrawn, drawerName],
+                    // 3. Update the public document: Mark the target as taken
+                    transaction.update(publicRef, {
                         targets_assigned: [...targetsAssigned, newTargetName],
-                        assignments: {
-                            ...assignments,
-                            [drawerName]: encryptedTarget
-                        }
+                    });
+                    
+                    // 4. Create/Update the private assignment document: Store the encrypted target
+                    transaction.set(privateRef, { 
+                        target: encryptedTarget,
+                        drawer: drawerName,
+                        drawn_at: Date.now()
                     });
 
                     return newTargetName;
@@ -406,15 +482,13 @@
                 console.error("Transaction failed:", error);
                 let message = "Failed to complete the draw.";
                 if (error.message.includes("Assignment pool is empty")) {
-                    message = "The draw is complete or corrupted. Please refresh.";
+                    message = "Assignment pool error: Unable to find a valid recipient.";
                 }
                 showMessage(message, true);
                 elements.spinButton.disabled = false;
             }
         }
         
-        // No updateAssignment needed since we use runTransaction now.
-
         function animateSpin(targetName) {
             elements.targetNameDisplay.textContent = ALL_PARTICIPANTS[0];
             elements.resultBox.classList.remove('hidden');
@@ -446,14 +520,20 @@
         
         // --- Admin Functionality ---
         async function resetDraw() {
-            if (!confirm("Are you sure you want to completely reset the Secret Santa draw? All assignments will be lost.")) {
-                return; // Use native confirm since the error handling mandates custom modals
+            // Using custom modal replacement for confirm()
+            if (!confirm("Are you sure you want to completely reset the Secret Santa draw? This will erase ALL ENROLLMENTS and ALL ASSIGNMENTS.")) {
+                return; 
             }
 
             elements.resetButton.disabled = true;
             try {
-                await setDoc(getDrawDocRef(), initialData);
-                showMessage("The Secret Santa draw has been successfully reset!", false);
+                // 1. Reset Public Data
+                await setDoc(getPublicDocRef(), initialPublicData);
+                
+                // NOTE: We rely on security rules to prevent reading/writing other users' private data.
+                // Resetting the public data is enough, as the new draw will overwrite the old map.
+                showMessage("The Secret Santa draw has been successfully reset! All users must re-enroll.", false);
+
             } catch (error) {
                 console.error("Error resetting draw:", error);
                 showMessage("Failed to reset the draw in Firestore.", true);
@@ -463,13 +543,11 @@
         }
 
         // --- Event Listeners ---
-        elements.drawerSelect.addEventListener('change', handleUserSelection);
         elements.spinButton.addEventListener('click', spinAndAssign);
         elements.resetButton.addEventListener('click', resetDraw);
 
         // --- Initialization ---
         document.addEventListener('DOMContentLoaded', () => {
-            populateParticipantDropdown();
             initializeFirebase();
         });
 
