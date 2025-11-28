@@ -3,98 +3,103 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Secret Santa Draw</title>
+    <title>Secret Santa 2024</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
-        body { font-family: 'Inter', sans-serif; background-color: #f7f9fb; }
-        .bg-christmas-red { background-color: #990000; }
-        .text-christmas-red { color: #990000; }
-        .bg-christmas-green { background-color: #006633; }
-        .text-christmas-green { color: #006633; }
-        .bg-gold { background-color: #ffd700; }
-        .text-gold { color: #ffd700; }
-        @keyframes spin-text {
-            0% { transform: translateY(0); opacity: 1; }
-            5% { transform: translateY(-50px); opacity: 0; }
-            10% { transform: translateY(50px); opacity: 0; }
-            15% { transform: translateY(0); opacity: 1; }
-            100% { transform: translateY(0); opacity: 1; }
+        body { font-family: 'Inter', sans-serif; background-color: #f0fdf4; }
+        .bg-xmas-red { background-color: #D42426; }
+        .bg-xmas-green { background-color: #165B33; }
+        .text-xmas-red { color: #D42426; }
+        .text-xmas-green { color: #165B33; }
+        .bg-snow { background-color: #F8B229; }
+        
+        @keyframes popIn {
+            0% { transform: scale(0.9); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
         }
-        .spinning { transition: transform 0.1s; }
+        .animate-pop { animation: popIn 0.3s ease-out forwards; }
     </style>
 </head>
-<body class="min-h-screen flex items-center justify-center p-4">
+<body class="min-h-screen flex flex-col items-center justify-center p-4">
 
-    <div id="app-container" class="w-full max-w-lg bg-white shadow-2xl rounded-xl p-8 transition-all duration-300">
-        <header class="text-center mb-8">
-            <h1 class="text-4xl font-bold text-christmas-red mb-2">Secret Santa Draw 🎁</h1>
-            <p class="text-gray-600" id="header-subtitle">Enrollment and Draw</p>
-        </header>
+    <div class="text-center mb-6">
+        <h1 class="text-4xl font-extrabold text-xmas-red tracking-tight drop-shadow-sm">🎅 Secret Santa</h1>
+        <p class="text-xmas-green font-medium mt-1">Official Draw</p>
+    </div>
 
-        <div id="loading-indicator" class="text-center p-4">
-            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-christmas-green inline-block"></div>
-            <p class="mt-2 text-christmas-green">Resetting session...</p>
-        </div>
-
-        <div id="enrollment-area" class="space-y-4 p-6 bg-red-100 text-red-800 rounded-lg shadow-md hidden">
-            <h2 class="text-xl font-bold">Select Your Name</h2>
-            <p class="text-sm">Identify yourself to draw a name.</p>
-            <div id="enrollment-form">
-                <select id="enrollment-select" class="block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:border-red-500 focus:ring focus:ring-red-500 text-lg">
-                    <option value="" disabled selected>Select Your Name</option>
-                </select>
-                <button id="enroll-button" class="mt-4 w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition duration-200 disabled:opacity-50">
-                    I am this person
-                </button>
-            </div>
-            <div id="enrollment-status" class="text-sm font-semibold mt-2 hidden"></div>
-        </div>
+    <div class="w-full max-w-md bg-white shadow-xl rounded-2xl overflow-hidden border-t-4 border-xmas-red">
         
-        <div id="main-content" class="space-y-6 hidden">
-            <div id="user-identity-area" class="bg-gray-50 p-4 rounded-lg shadow-inner text-center">
-                <h2 id="welcome-message" class="text-2xl font-bold text-christmas-green mb-1"></h2>
-                <p class="text-xs mt-2 text-gray-400">Session ID: <span id="auth-status">...</span></p>
-            </div>
+        <div id="loading-view" class="p-8 text-center">
+            <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-xmas-red mx-auto"></div>
+            <p class="mt-4 text-gray-500 text-sm">Connecting to North Pole...</p>
+        </div>
 
-            <div id="spin-area" class="p-6 rounded-lg border-2 border-dashed border-gold/50 text-center">
-                <button id="spin-button" class="w-full bg-christmas-red hover:bg-christmas-green text-white font-bold py-3 px-6 rounded-lg shadow-md transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed text-xl" disabled>
-                    Start the Draw!
-                </button>
+        <div id="setup-view" class="p-6 hidden">
+            <h2 class="text-xl font-bold text-gray-800 mb-2">Game Setup</h2>
+            <p class="text-sm text-gray-600 mb-4">Select everyone who is present and playing today.</p>
+            
+            <div id="participants-checks" class="space-y-2 mb-6 max-h-60 overflow-y-auto p-2 bg-gray-50 rounded border">
+                </div>
 
-                <div id="result-box" class="mt-8 p-6 bg-christmas-green rounded-lg shadow-xl hidden">
-                    <p class="text-white text-xl font-semibold">You are buying a gift for:</p>
-                    <div class="my-4">
-                        <span id="target-name-display" class="text-6xl font-extrabold text-gold block leading-tight tracking-wider">???</span>
+            <button id="start-game-btn" class="w-full py-3 bg-xmas-green text-white font-bold rounded-lg hover:bg-green-800 shadow-md transition transform active:scale-95">
+                Shuffle & Start Game 🎲
+            </button>
+            <p class="text-xs text-center text-gray-400 mt-2">This will assign everyone a target immediately.</p>
+        </div>
+
+        <div id="reveal-view" class="hidden relative">
+            
+            <div id="step-identify" class="p-8 animate-pop">
+                <h2 class="text-2xl font-bold text-center text-gray-800 mb-6">Who are you?</h2>
+                
+                <div class="relative">
+                    <select id="user-select" class="w-full p-4 text-lg border-2 border-gray-200 rounded-xl bg-white focus:border-xmas-red focus:ring-xmas-red outline-none appearance-none">
+                        <option value="" disabled selected>Tap to select your name</option>
+                    </select>
+                    <div class="absolute inset-y-0 right-0 flex items-center px-4 pointer-events-none text-gray-500">
+                        ▼
                     </div>
-                    <p class="text-white text-sm opacity-80">Remember this! Use a screenshot.</p>
                 </div>
 
-                <div id="already-drawn-message" class="mt-8 p-4 bg-yellow-100 text-yellow-800 rounded-lg shadow-md hidden">
-                    <p class="font-semibold">This user has already drawn!</p>
-                    <p class="text-sm mt-1">For security, you cannot see the result again on a new session. Ask the admin if you forgot.</p>
-                </div>
+                <button id="reveal-btn" disabled class="mt-6 w-full py-4 bg-xmas-red text-white text-xl font-bold rounded-xl shadow-lg opacity-50 cursor-not-allowed transition-all">
+                    Reveal My Target 🎁
+                </button>
             </div>
 
-            <div class="p-4 bg-gray-50 rounded-lg shadow-inner">
-                <p class="text-sm font-semibold text-christmas-green mb-2">Active Participants (<span id="participant-count">0</span> Total):</p>
-                <ul id="participant-list" class="flex flex-wrap gap-2 text-sm text-gray-700"></ul>
+            <div id="step-result" class="hidden p-8 bg-xmas-green h-full min-h-[400px] flex flex-col items-center justify-center text-center animate-pop">
+                <p class="text-green-100 text-lg font-medium mb-2">You are the Secret Santa for:</p>
+                
+                <div class="my-6 p-6 bg-white/10 rounded-2xl backdrop-blur-sm border border-white/20 w-full">
+                    <h1 id="target-name" class="text-5xl font-black text-white tracking-wider drop-shadow-md">???</h1>
+                </div>
+
+                <p class="text-green-200 text-xs mb-8">Take a screenshot! This message will vanish.</p>
+
+                <button id="clear-btn" class="w-full py-3 bg-white text-xmas-green font-bold rounded-lg shadow hover:bg-gray-100">
+                    Clear Screen & Next Person 🔄
+                </button>
             </div>
+
         </div>
-        
-        <div id="message-box" class="mt-4 p-3 rounded-lg text-sm text-center hidden"></div>
+
+        <div id="error-view" class="p-6 hidden text-center">
+             <div class="text-5xl mb-4">🎅</div>
+             <h2 class="text-xl font-bold text-gray-800">Ho Ho Ho!</h2>
+             <p id="error-msg" class="text-gray-600 mt-2"></p>
+             <button onclick="location.reload()" class="mt-6 text-xmas-red underline font-semibold">Try Again</button>
+        </div>
+    </div>
+
+    <div class="mt-6 text-center">
+        <p class="text-xs text-gray-400">Secure Draw • No Duplicate Picks • Zero Leaks</p>
     </div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        // Import signOut
-        import { getAuth, signInAnonymously, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, onSnapshot, runTransaction, updateDoc, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, doc, getDoc, setDoc, writeBatch, onSnapshot, collection } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        setLogLevel('Silent'); // Reduce console noise
-
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        
+        // 1. Config
         const firebaseConfig = {
             apiKey: "AIzaSyAJ9K9fQ0ThMB7aXB6qNHr3_yLUdqJgnCM",
             authDomain: "my-chain-reaction-game.firebaseapp.com",
@@ -103,315 +108,193 @@
             messagingSenderId: "32751418407",
             appId: "1:32751418407:web:ff8244007ef2b099d56202"
         };
-        
-        let app, db, auth, userId = null;
-        
-        const MASTER_PARTICIPANTS = ["Arjun", "Alvin", "Shany", "Adarsh", "Gokul", "Vismaya", "Amal", "Aswin", "Ambady"];
-        let currentDrawerName = null; 
-        
-        const initialPublicData = {
-            master_participants: MASTER_PARTICIPANTS,
-            active_participants: MASTER_PARTICIPANTS,
-            user_name_map: {}, 
-            targets_assigned: [], 
-            current_draw_id: Date.now() 
+
+        const MASTER_LIST = ["Arjun", "Alvin", "Shany", "Adarsh", "Gokul", "Vismaya", "Amal", "Aswin", "Ambady"];
+        const APP_ID = 'santa_v2_secure'; // Versioning to ensure clean slate
+
+        // 2. Init
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        // DOM Elements
+        const els = {
+            loading: document.getElementById('loading-view'),
+            setup: document.getElementById('setup-view'),
+            reveal: document.getElementById('reveal-view'),
+            checkList: document.getElementById('participants-checks'),
+            startBtn: document.getElementById('start-game-btn'),
+            userSelect: document.getElementById('user-select'),
+            revealBtn: document.getElementById('reveal-btn'),
+            stepIdentify: document.getElementById('step-identify'),
+            stepResult: document.getElementById('step-result'),
+            targetName: document.getElementById('target-name'),
+            clearBtn: document.getElementById('clear-btn'),
+            errorView: document.getElementById('error-view'),
+            errorMsg: document.getElementById('error-msg')
         };
 
-        let currentDrawState = {
-            active_participants: [],
-            user_name_map: {},
-            targets_assigned: [],
-            current_draw_id: 0
-        };
-
-        const elements = {
-            loading: document.getElementById('loading-indicator'),
-            mainContent: document.getElementById('main-content'),
-            enrollmentArea: document.getElementById('enrollment-area'),
-            enrollmentSelect: document.getElementById('enrollment-select'),
-            enrollButton: document.getElementById('enroll-button'),
-            enrollmentStatus: document.getElementById('enrollment-status'),
-            messageBox: document.getElementById('message-box'),
-            welcomeMessage: document.getElementById('welcome-message'),
-            spinButton: document.getElementById('spin-button'),
-            resultBox: document.getElementById('result-box'),
-            targetNameDisplay: document.getElementById('target-name-display'),
-            participantList: document.getElementById('participant-list'),
-            participantCount: document.getElementById('participant-count'),
-            alreadyDrawnMessage: document.getElementById('already-drawn-message'),
-            authStatus: document.getElementById('auth-status'),
-        };
-
-        function getPublicDocRef() {
-            return doc(db, 'artifacts', appId, 'public', 'data', 'christmas_exchange', 'gift_exchange_public');
-        }
-        
-        function getPrivateAssignmentDocRef(uid) {
-            return doc(db, 'artifacts', appId, 'users', uid, 'secret_santa', 'assignment');
-        }
-
-        function showMessage(text, isError = false) {
-            elements.messageBox.textContent = text;
-            elements.messageBox.className = `mt-4 p-3 rounded-lg text-sm text-center ${isError ? 'bg-red-100 text-red-800' : 'bg-blue-100 text-blue-800'}`;
-            elements.messageBox.style.display = 'block';
-        }
-
-        function hideMessage() {
-            elements.messageBox.style.display = 'none';
-        }
-        
-        function populateEnrollmentDropdown() {
-            elements.enrollmentSelect.innerHTML = '<option value="" disabled selected>Select Your Name</option>';
-            const activeParticipants = currentDrawState.active_participants || [];
-            const targetsAssigned = currentDrawState.targets_assigned || [];
-
-            // We allow selecting any active participant who hasn't been clearly identified as 'done'
-            // OR we just list everyone and check status on click. Listing everyone is safer for UI clarity.
-            activeParticipants.forEach(name => {
-                const option = document.createElement('option');
-                option.value = name;
-                // Visual cue if they already drew
-                if (targetsAssigned.includes(name)) {
-                    option.textContent = name + " (Already Drawn)";
-                    // Optional: disable them? 
-                    // option.disabled = true; 
-                } else {
-                    option.textContent = name;
+        // 3. Logic: Derangement Shuffle (The Math that fixes the deadlock)
+        function getDerangement(list) {
+            let shuffled = [...list];
+            let isValid = false;
+            // Keep shuffling until no one matches their original index
+            while (!isValid) {
+                for (let i = shuffled.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
                 }
-                elements.enrollmentSelect.appendChild(option);
+                isValid = list.every((val, index) => val !== shuffled[index]);
+            }
+            return shuffled;
+        }
+
+        // 4. Core Application Flow
+        async function init() {
+            const gameRef = doc(db, 'artifacts', APP_ID, 'public', 'state');
+            
+            onSnapshot(gameRef, (snap) => {
+                els.loading.classList.add('hidden');
+                
+                if (!snap.exists()) {
+                    // No game exists -> Show Setup
+                    showSetup();
+                } else {
+                    const data = snap.data();
+                    if (data.status === 'STARTED') {
+                        // Game is live -> Show Reveal UI
+                        setupRevealUI(data.participants);
+                    } else {
+                        showSetup();
+                    }
+                }
             });
-            elements.enrollButton.disabled = elements.enrollmentSelect.value === "";
         }
 
-        function updateParticipantList() {
-            const activeParticipants = currentDrawState.active_participants || [];
-            elements.participantCount.textContent = activeParticipants.length;
-
-            elements.participantList.innerHTML = activeParticipants.map(name => {
-                // Check if this person has drawn based on public list
-                const hasDrawn = (currentDrawState.targets_assigned || []).includes(name);
-                const drawnClass = hasDrawn ? 'bg-yellow-200 text-yellow-800' : 'bg-gray-200 text-gray-600';
-                return `<li class="px-3 py-1 ${drawnClass} rounded-full text-xs font-medium">${name} ${hasDrawn ? '✓' : ''}</li>`;
-            }).join('');
+        function showSetup() {
+            els.setup.classList.remove('hidden');
+            els.reveal.classList.add('hidden');
+            els.checkList.innerHTML = '';
+            
+            MASTER_LIST.forEach(name => {
+                const div = document.createElement('div');
+                div.className = 'flex items-center p-2 hover:bg-gray-100 rounded cursor-pointer';
+                div.innerHTML = `
+                    <input type="checkbox" id="chk-${name}" value="${name}" checked class="w-5 h-5 text-xmas-red rounded focus:ring-xmas-red">
+                    <label for="chk-${name}" class="ml-3 font-medium text-gray-700 cursor-pointer select-none flex-1">${name}</label>
+                `;
+                div.onclick = (e) => {
+                    if (e.target.tagName !== 'INPUT') {
+                        const box = div.querySelector('input');
+                        box.checked = !box.checked;
+                    }
+                };
+                els.checkList.appendChild(div);
+            });
         }
 
-        async function initializeFirebase() {
-            elements.loading.classList.remove('hidden');
-            if (Object.keys(firebaseConfig).length === 0) return;
+        async function startGame() {
+            els.startBtn.disabled = true;
+            els.startBtn.textContent = "Calculating Pairs...";
+
+            // 1. Get selected players
+            const selected = Array.from(document.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
+            
+            if (selected.length < 2) {
+                alert("Need at least 2 people!");
+                els.startBtn.disabled = false;
+                return;
+            }
+
+            // 2. Generate Pairs (Derangement)
+            const targets = getDerangement(selected);
+            
+            // 3. Prepare Batch Write
+            const batch = writeBatch(db);
+            
+            // Save public state (list of names only, no targets)
+            const publicRef = doc(db, 'artifacts', APP_ID, 'public', 'state');
+            batch.set(publicRef, {
+                status: 'STARTED',
+                participants: selected.sort(), // Alphabetical for dropdown
+                startedAt: Date.now()
+            });
+
+            // Save individual SECRET assignments
+            // Structure: artifacts/santa_v2_secure/assignments/{NAME} -> { target: "TargetName" }
+            selected.forEach((drawer, index) => {
+                const target = targets[index];
+                const secretRef = doc(db, 'artifacts', APP_ID, 'assignments', drawer);
+                batch.set(secretRef, { target: target });
+            });
 
             try {
-                app = initializeApp(firebaseConfig);
-                auth = getAuth(app);
-                db = getFirestore(app);
-
-                // --- CRITICAL CHANGE ---
-                // 1. Force sign out first to clear any previous session (cookies/localstorage)
-                try { await signOut(auth); } catch(e) { /* ignore if no user */ }
-                
-                // 2. Sign in fresh. Every reload = New User ID.
-                await signInAnonymously(auth);
-                
-                userId = auth.currentUser.uid;
-                elements.authStatus.textContent = userId.substring(0, 6) + "..."; // Short ID for UI
-                elements.loading.classList.add('hidden');
-                
-                setupRealtimeListeners();
-            } catch (error) {
-                console.error("Auth error:", error);
-                showMessage(`Initialization failed: ${error.message}`, true);
-                elements.loading.classList.add('hidden');
+                await batch.commit();
+                // UI updates automatically via onSnapshot
+            } catch (e) {
+                console.error(e);
+                alert("Error starting game: " + e.message);
+                els.startBtn.disabled = false;
             }
         }
-        
-        function setupRealtimeListeners() {
-            const publicRef = getPublicDocRef();
-            // Note: We listen to the private ref for THIS session, which is empty initially
-            const privateRef = getPrivateAssignmentDocRef(userId);
 
-            onSnapshot(publicRef, (docSnap) => {
-                if (docSnap.exists()) {
-                    currentDrawState = docSnap.data();
-                } else {
-                    setDoc(publicRef, initialPublicData);
-                    currentDrawState = initialPublicData;
-                }
-                
-                if (!Array.isArray(currentDrawState.active_participants) || currentDrawState.active_participants.length === 0) {
-                    currentDrawState.active_participants = currentDrawState.master_participants || MASTER_PARTICIPANTS;
-                }
-                
-                handlePublicStateUpdate();
-            }, (error) => {
-                console.error("Public listen error:", error);
-            });
+        function setupRevealUI(participants) {
+            els.setup.classList.add('hidden');
+            els.reveal.classList.remove('hidden');
             
-            // Listen for changes to MY result (after I draw)
-            onSnapshot(privateRef, (docSnap) => {
-                const data = docSnap.exists() ? docSnap.data() : {};
-                if (data.target && currentDrawerName) {
-                    // Result found for this session
-                    showResult(data.target);
-                    elements.spinButton.textContent = "Drawing Complete";
-                    elements.spinButton.disabled = true;
-                }
+            els.userSelect.innerHTML = '<option value="" disabled selected>Tap to select your name</option>';
+            participants.forEach(name => {
+                const opt = document.createElement('option');
+                opt.value = name;
+                opt.textContent = name;
+                els.userSelect.appendChild(opt);
             });
         }
-        
-        function handlePublicStateUpdate() {
-            updateParticipantList();
 
-            // If we have selected a name, update UI state based on that name
-            if (currentDrawerName) {
-                elements.enrollmentArea.classList.add('hidden');
-                elements.mainContent.classList.remove('hidden');
-                elements.welcomeMessage.textContent = `Hello, ${currentDrawerName}!`;
-                
-                // Check if this user has ALREADY drawn in a previous session
-                if ((currentDrawState.targets_assigned || []).includes(currentDrawerName)) {
-                    // They drew before (ID is in public list), but this is a NEW session (ID not in private doc)
-                    // We cannot show them the result because it's locked in the old session.
-                    elements.spinButton.classList.add('hidden');
-                    elements.resultBox.classList.add('hidden');
-                    elements.alreadyDrawnMessage.classList.remove('hidden');
-                } else {
-                    // Ready to draw
-                    elements.spinButton.classList.remove('hidden');
-                    elements.alreadyDrawnMessage.classList.add('hidden');
-                    elements.spinButton.disabled = false;
-                    elements.spinButton.textContent = "Start the Draw!";
-                }
-            } else {
-                // No name selected yet
-                elements.enrollmentArea.classList.remove('hidden');
-                elements.mainContent.classList.add('hidden');
-                populateEnrollmentDropdown();
-            }
-        }
+        // Event Listeners
+        els.startBtn.addEventListener('click', startGame);
 
-        function showResult(targetName) {
-            elements.targetNameDisplay.textContent = targetName;
-            elements.resultBox.classList.remove('hidden');
-            // Hide spin button to clean up UI
-            elements.spinButton.classList.add('hidden');
-        }
-        
-        elements.enrollmentSelect.addEventListener('change', () => {
-            elements.enrollButton.disabled = elements.enrollmentSelect.value === "";
+        els.userSelect.addEventListener('change', () => {
+            els.revealBtn.disabled = false;
+            els.revealBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+            els.revealBtn.classList.add('hover:bg-red-700', 'active:scale-95');
         });
 
-        elements.enrollButton.addEventListener('click', async () => {
-            const selectedName = elements.enrollmentSelect.value;
-            if (!selectedName || !userId) return;
+        els.revealBtn.addEventListener('click', async () => {
+            const name = els.userSelect.value;
+            if (!name) return;
 
-            elements.enrollButton.disabled = true;
-            elements.enrollmentStatus.classList.remove('hidden');
-            elements.enrollmentStatus.textContent = `Connecting as ${selectedName}...`;
+            els.revealBtn.textContent = "Unwrapping...";
+            els.revealBtn.disabled = true;
 
             try {
-                // Update the global map to point "Arjun" to THIS new session ID
-                // This "steals" the identity from any previous browser session
-                const publicRef = getPublicDocRef();
-                
-                // We don't strictly NEED to update the map for the logic to work if we only check active_participants,
-                // but we do it to keep the "one device per user" logic somewhat consistent.
-                await updateDoc(publicRef, { 
-                    [`user_name_map.${userId}`]: selectedName
-                });
+                // Fetch the PRE-ASSIGNED target
+                const secretRef = doc(db, 'artifacts', APP_ID, 'assignments', name);
+                const snap = await getDoc(secretRef);
 
-                currentDrawerName = selectedName;
-                handlePublicStateUpdate(); // Refresh UI
-                
-            } catch (error) {
-                console.error("Enrollment failed:", error);
-                showMessage(`Error: ${error.message}`, true);
-                elements.enrollButton.disabled = false;
-            } finally {
-                elements.enrollmentStatus.classList.add('hidden');
+                if (snap.exists()) {
+                    const target = snap.data().target;
+                    els.targetName.textContent = target;
+                    
+                    // Switch views
+                    els.stepIdentify.classList.add('hidden');
+                    els.stepResult.classList.remove('hidden');
+                } else {
+                    throw new Error("Assignment not found. Contact Admin.");
+                }
+            } catch (e) {
+                els.reveal.classList.add('hidden');
+                els.errorView.classList.remove('hidden');
+                els.errorMsg.textContent = e.message;
             }
         });
 
-        async function spinAndAssign() {
-            if (!currentDrawerName) return;
+        els.clearBtn.addEventListener('click', () => {
+            // Reload page to clear memory and reset UI state cleanly
+            window.location.reload();
+        });
 
-            elements.spinButton.disabled = true;
-            hideMessage();
-            
-            const publicRef = getPublicDocRef();
-            const privateRef = getPrivateAssignmentDocRef(userId);
-
-            try {
-                const targetName = await runTransaction(db, async (transaction) => {
-                    const publicSnap = await transaction.get(publicRef);
-                    if (!publicSnap.exists()) throw new Error("System error: No data.");
-                    
-                    const publicData = publicSnap.data();
-                    const targetsAssigned = publicData.targets_assigned || [];
-                    
-                    // Double check inside transaction
-                    if (targetsAssigned.includes(currentDrawerName)) {
-                        throw new Error("You have already drawn!");
-                    }
-
-                    const availableTargets = (publicData.active_participants || []).filter(
-                        name => name !== currentDrawerName && !targetsAssigned.includes(name)
-                    );
-
-                    if (availableTargets.length === 0) {
-                        throw new Error("No one left to draw! Contact Admin.");
-                    }
-
-                    const randomIndex = Math.floor(Math.random() * availableTargets.length);
-                    const newTargetName = availableTargets[randomIndex];
-                    
-                    // 1. Add drawer to "done" list
-                    transaction.update(publicRef, {
-                        targets_assigned: [...targetsAssigned, newTargetName],
-                    });
-                    
-                    // 2. Save secret result to THIS user's private doc
-                    transaction.set(privateRef, { 
-                        target: newTargetName,
-                        drawer: currentDrawerName,
-                        draw_id: publicData.current_draw_id,
-                        drawn_at: Date.now()
-                    });
-
-                    return newTargetName;
-                });
-
-                animateSpin(targetName);
-
-            } catch (error) {
-                console.error("Transaction failed:", error);
-                showMessage(error.message, true);
-                elements.spinButton.disabled = false;
-            }
-        }
-        
-        function animateSpin(targetName) {
-            const animationNames = currentDrawState.active_participants.length > 0 ? 
-                                   currentDrawState.active_participants : MASTER_PARTICIPANTS;
-            elements.targetNameDisplay.textContent = animationNames[0];
-            elements.resultBox.classList.remove('hidden');
-            elements.spinButton.textContent = "Drawing...";
-            elements.targetNameDisplay.classList.add('spinning');
-            
-            const start = Date.now();
-            const interval = setInterval(() => {
-                const elapsed = Date.now() - start;
-                if (elapsed < 2500) {
-                    const randomIndex = Math.floor(Math.random() * animationNames.length);
-                    elements.targetNameDisplay.textContent = animationNames[randomIndex];
-                } else {
-                    clearInterval(interval);
-                    elements.targetNameDisplay.classList.remove('spinning');
-                    showResult(targetName);
-                }
-            }, 80);
-        }
-        
-        elements.spinButton.addEventListener('click', spinAndAssign);
-        document.addEventListener('DOMContentLoaded', () => { initializeFirebase(); });
+        // Start
+        init();
     </script>
 </body>
 </html>
