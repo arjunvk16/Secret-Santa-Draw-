@@ -12,10 +12,9 @@
         .bg-xmas-green { background-color: #165B33; }
         .text-xmas-red { color: #D42426; }
         .text-xmas-green { color: #165B33; }
-        .bg-snow { background-color: #F8B229; }
         
         @keyframes popIn {
-            0% { transform: scale(0.9); opacity: 0; }
+            0% { transform: scale(0.95); opacity: 0; }
             100% { transform: scale(1); opacity: 1; }
         }
         .animate-pop { animation: popIn 0.3s ease-out forwards; }
@@ -28,16 +27,16 @@
         <p class="text-xmas-green font-medium mt-1">Official Draw</p>
     </div>
 
-    <div class="w-full max-w-md bg-white shadow-xl rounded-2xl overflow-hidden border-t-4 border-xmas-red">
+    <div class="w-full max-w-md bg-white shadow-xl rounded-2xl overflow-hidden border-t-4 border-xmas-red min-h-[400px]">
         
-        <div id="loading-view" class="p-8 text-center">
+        <div id="loading-view" class="p-8 text-center flex flex-col h-full justify-center items-center">
             <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-xmas-red mx-auto"></div>
-            <p class="mt-4 text-gray-500 text-sm">Connecting to North Pole...</p>
+            <p class="mt-4 text-gray-500 text-sm">Syncing with North Pole...</p>
         </div>
 
         <div id="setup-view" class="p-6 hidden">
             <h2 class="text-xl font-bold text-gray-800 mb-2">Game Setup</h2>
-            <p class="text-sm text-gray-600 mb-4">Select everyone who is present and playing today.</p>
+            <p class="text-sm text-gray-600 mb-4">Select everyone who is playing.</p>
             
             <div id="participants-checks" class="space-y-2 mb-6 max-h-60 overflow-y-auto p-2 bg-gray-50 rounded border">
                 </div>
@@ -45,21 +44,20 @@
             <button id="start-game-btn" class="w-full py-3 bg-xmas-green text-white font-bold rounded-lg hover:bg-green-800 shadow-md transition transform active:scale-95">
                 Shuffle & Start Game 🎲
             </button>
-            <p class="text-xs text-center text-gray-400 mt-2">This will assign everyone a target immediately.</p>
+            <p class="text-xs text-center text-gray-400 mt-2">This will assign targets and lock the list.</p>
         </div>
 
-        <div id="reveal-view" class="hidden relative">
+        <div id="reveal-view" class="hidden relative h-full">
             
-            <div id="step-identify" class="p-8 animate-pop">
+            <div id="step-identify" class="p-8 animate-pop h-full flex flex-col justify-center">
                 <h2 class="text-2xl font-bold text-center text-gray-800 mb-6">Who are you?</h2>
+                <p class="text-xs text-center text-gray-400 mb-4">(Names disappear after drawing)</p>
                 
                 <div class="relative">
                     <select id="user-select" class="w-full p-4 text-lg border-2 border-gray-200 rounded-xl bg-white focus:border-xmas-red focus:ring-xmas-red outline-none appearance-none">
-                        <option value="" disabled selected>Tap to select your name</option>
+                        <option value="" disabled selected>Tap to find your name...</option>
                     </select>
-                    <div class="absolute inset-y-0 right-0 flex items-center px-4 pointer-events-none text-gray-500">
-                        ▼
-                    </div>
+                    <div class="absolute inset-y-0 right-0 flex items-center px-4 pointer-events-none text-gray-500">▼</div>
                 </div>
 
                 <button id="reveal-btn" disabled class="mt-6 w-full py-4 bg-xmas-red text-white text-xl font-bold rounded-xl shadow-lg opacity-50 cursor-not-allowed transition-all">
@@ -67,37 +65,39 @@
                 </button>
             </div>
 
-            <div id="step-result" class="hidden p-8 bg-xmas-green h-full min-h-[400px] flex flex-col items-center justify-center text-center animate-pop">
-                <p class="text-green-100 text-lg font-medium mb-2">You are the Secret Santa for:</p>
+            <div id="step-result" class="hidden p-8 bg-xmas-green h-full flex flex-col items-center justify-center text-center animate-pop absolute inset-0 z-10">
+                <p class="text-green-100 text-lg font-medium mb-2">You are buying a gift for:</p>
                 
                 <div class="my-6 p-6 bg-white/10 rounded-2xl backdrop-blur-sm border border-white/20 w-full">
                     <h1 id="target-name" class="text-5xl font-black text-white tracking-wider drop-shadow-md">???</h1>
                 </div>
 
-                <p class="text-green-200 text-xs mb-8">Take a screenshot! This message will vanish.</p>
+                <div class="bg-yellow-500 text-yellow-900 text-xs font-bold px-3 py-1 rounded-full mb-8">
+                    ⚠️ Screenshot this now!
+                </div>
 
                 <button id="clear-btn" class="w-full py-3 bg-white text-xmas-green font-bold rounded-lg shadow hover:bg-gray-100">
-                    Clear Screen & Next Person 🔄
+                    Done! Clear Screen 🔄
                 </button>
             </div>
 
-        </div>
+             <div id="game-over-msg" class="hidden text-center p-8">
+                <div class="text-6xl mb-4">🎄</div>
+                <h2 class="text-xl font-bold text-gray-700">All Done!</h2>
+                <p class="text-gray-500">Everyone has drawn their name.</p>
+                <button id="reset-game-btn" class="mt-8 text-xs text-red-400 underline">Reset Game (Admin Only)</button>
+             </div>
 
-        <div id="error-view" class="p-6 hidden text-center">
-             <div class="text-5xl mb-4">🎅</div>
-             <h2 class="text-xl font-bold text-gray-800">Ho Ho Ho!</h2>
-             <p id="error-msg" class="text-gray-600 mt-2"></p>
-             <button onclick="location.reload()" class="mt-6 text-xmas-red underline font-semibold">Try Again</button>
         </div>
     </div>
 
     <div class="mt-6 text-center">
-        <p class="text-xs text-gray-400">Secure Draw • No Duplicate Picks • Zero Leaks</p>
+        <p class="text-xs text-gray-400">Status: <span id="connection-status">Connecting...</span></p>
     </div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getFirestore, doc, getDoc, setDoc, writeBatch, onSnapshot, collection } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, doc, getDoc, setDoc, writeBatch, onSnapshot, updateDoc, arrayUnion } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // 1. Config
         const firebaseConfig = {
@@ -110,7 +110,7 @@
         };
 
         const MASTER_LIST = ["Arjun", "Alvin", "Shany", "Adarsh", "Gokul", "Vismaya", "Amal", "Aswin", "Ambady"];
-        const APP_ID = 'santa_v2_secure'; // Versioning to ensure clean slate
+        const APP_ID = 'santa_v3_vanish'; // New ID to ensure clean database
 
         // 2. Init
         const app = initializeApp(firebaseConfig);
@@ -129,15 +129,15 @@
             stepResult: document.getElementById('step-result'),
             targetName: document.getElementById('target-name'),
             clearBtn: document.getElementById('clear-btn'),
-            errorView: document.getElementById('error-view'),
-            errorMsg: document.getElementById('error-msg')
+            gameOverMsg: document.getElementById('game-over-msg'),
+            resetBtn: document.getElementById('reset-game-btn'),
+            status: document.getElementById('connection-status')
         };
 
-        // 3. Logic: Derangement Shuffle (The Math that fixes the deadlock)
+        // 3. Logic: Derangement Shuffle
         function getDerangement(list) {
             let shuffled = [...list];
             let isValid = false;
-            // Keep shuffling until no one matches their original index
             while (!isValid) {
                 for (let i = shuffled.length - 1; i > 0; i--) {
                     const j = Math.floor(Math.random() * (i + 1));
@@ -149,24 +149,26 @@
         }
 
         // 4. Core Application Flow
-        async function init() {
+        function init() {
             const gameRef = doc(db, 'artifacts', APP_ID, 'public', 'state');
             
             onSnapshot(gameRef, (snap) => {
                 els.loading.classList.add('hidden');
+                els.status.textContent = "Live";
                 
                 if (!snap.exists()) {
-                    // No game exists -> Show Setup
                     showSetup();
                 } else {
                     const data = snap.data();
                     if (data.status === 'STARTED') {
-                        // Game is live -> Show Reveal UI
-                        setupRevealUI(data.participants);
+                        updateDropdown(data.participants, data.revealed || []);
                     } else {
                         showSetup();
                     }
                 }
+            }, (err) => {
+                els.status.textContent = "Error";
+                console.error(err);
             });
         }
 
@@ -182,67 +184,30 @@
                     <input type="checkbox" id="chk-${name}" value="${name}" checked class="w-5 h-5 text-xmas-red rounded focus:ring-xmas-red">
                     <label for="chk-${name}" class="ml-3 font-medium text-gray-700 cursor-pointer select-none flex-1">${name}</label>
                 `;
-                div.onclick = (e) => {
-                    if (e.target.tagName !== 'INPUT') {
-                        const box = div.querySelector('input');
-                        box.checked = !box.checked;
-                    }
-                };
                 els.checkList.appendChild(div);
             });
         }
 
-        async function startGame() {
-            els.startBtn.disabled = true;
-            els.startBtn.textContent = "Calculating Pairs...";
-
-            // 1. Get selected players
-            const selected = Array.from(document.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
-            
-            if (selected.length < 2) {
-                alert("Need at least 2 people!");
-                els.startBtn.disabled = false;
-                return;
-            }
-
-            // 2. Generate Pairs (Derangement)
-            const targets = getDerangement(selected);
-            
-            // 3. Prepare Batch Write
-            const batch = writeBatch(db);
-            
-            // Save public state (list of names only, no targets)
-            const publicRef = doc(db, 'artifacts', APP_ID, 'public', 'state');
-            batch.set(publicRef, {
-                status: 'STARTED',
-                participants: selected.sort(), // Alphabetical for dropdown
-                startedAt: Date.now()
-            });
-
-            // Save individual SECRET assignments
-            // Structure: artifacts/santa_v2_secure/assignments/{NAME} -> { target: "TargetName" }
-            selected.forEach((drawer, index) => {
-                const target = targets[index];
-                const secretRef = doc(db, 'artifacts', APP_ID, 'assignments', drawer);
-                batch.set(secretRef, { target: target });
-            });
-
-            try {
-                await batch.commit();
-                // UI updates automatically via onSnapshot
-            } catch (e) {
-                console.error(e);
-                alert("Error starting game: " + e.message);
-                els.startBtn.disabled = false;
-            }
-        }
-
-        function setupRevealUI(participants) {
+        function updateDropdown(allParticipants, revealedList) {
             els.setup.classList.add('hidden');
             els.reveal.classList.remove('hidden');
             
-            els.userSelect.innerHTML = '<option value="" disabled selected>Tap to select your name</option>';
-            participants.forEach(name => {
+            // Filter: Take all participants AND REMOVE those in the revealedList
+            const availableNames = allParticipants.filter(name => !revealedList.includes(name));
+
+            if (availableNames.length === 0) {
+                // Game Over
+                els.stepIdentify.classList.add('hidden');
+                els.gameOverMsg.classList.remove('hidden');
+                return;
+            }
+
+            // Populate Dropdown
+            els.stepIdentify.classList.remove('hidden');
+            els.gameOverMsg.classList.add('hidden');
+            
+            els.userSelect.innerHTML = '<option value="" disabled selected>Tap to find your name...</option>';
+            availableNames.sort().forEach(name => {
                 const opt = document.createElement('option');
                 opt.value = name;
                 opt.textContent = name;
@@ -250,7 +215,42 @@
             });
         }
 
-        // Event Listeners
+        async function startGame() {
+            els.startBtn.disabled = true;
+            els.startBtn.textContent = "Shuffling...";
+
+            const selected = Array.from(document.querySelectorAll('#participants-checks input:checked')).map(cb => cb.value);
+            
+            if (selected.length < 2) {
+                alert("Need at least 2 people!");
+                els.startBtn.disabled = false;
+                return;
+            }
+
+            const targets = getDerangement(selected);
+            const batch = writeBatch(db);
+            
+            // 1. Set Public State
+            const publicRef = doc(db, 'artifacts', APP_ID, 'public', 'state');
+            batch.set(publicRef, {
+                status: 'STARTED',
+                participants: selected.sort(),
+                revealed: [], // Start with empty list
+                startedAt: Date.now()
+            });
+
+            // 2. Set Private Assignments
+            selected.forEach((drawer, index) => {
+                const secretRef = doc(db, 'artifacts', APP_ID, 'assignments', drawer);
+                batch.set(secretRef, { target: targets[index] });
+            });
+
+            await batch.commit();
+            // UI updates via snapshot listener
+        }
+
+        // EVENT LISTENERS
+
         els.startBtn.addEventListener('click', startGame);
 
         els.userSelect.addEventListener('change', () => {
@@ -263,34 +263,44 @@
             const name = els.userSelect.value;
             if (!name) return;
 
+            if(!confirm(`Are you definitely ${name}?`)) return;
+
             els.revealBtn.textContent = "Unwrapping...";
             els.revealBtn.disabled = true;
 
             try {
-                // Fetch the PRE-ASSIGNED target
+                // 1. Mark as revealed in Public State (This removes them from the dropdown for OTHERS)
+                const publicRef = doc(db, 'artifacts', APP_ID, 'public', 'state');
+                await updateDoc(publicRef, {
+                    revealed: arrayUnion(name)
+                });
+
+                // 2. Fetch Target
                 const secretRef = doc(db, 'artifacts', APP_ID, 'assignments', name);
                 const snap = await getDoc(secretRef);
 
                 if (snap.exists()) {
-                    const target = snap.data().target;
-                    els.targetName.textContent = target;
-                    
-                    // Switch views
+                    els.targetName.textContent = snap.data().target;
                     els.stepIdentify.classList.add('hidden');
                     els.stepResult.classList.remove('hidden');
-                } else {
-                    throw new Error("Assignment not found. Contact Admin.");
                 }
             } catch (e) {
-                els.reveal.classList.add('hidden');
-                els.errorView.classList.remove('hidden');
-                els.errorMsg.textContent = e.message;
+                alert("Error: " + e.message);
+                window.location.reload();
             }
         });
 
         els.clearBtn.addEventListener('click', () => {
-            // Reload page to clear memory and reset UI state cleanly
+            // Hard reload to ensure clean state for next user
             window.location.reload();
+        });
+
+        els.resetBtn.addEventListener('click', async () => {
+            if(confirm("DANGER: This will delete the current game and assignments. Are you sure?")) {
+                const publicRef = doc(db, 'artifacts', APP_ID, 'public', 'state');
+                await updateDoc(publicRef, { status: 'RESET' });
+                window.location.reload();
+            }
         });
 
         // Start
