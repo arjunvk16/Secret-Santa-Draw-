@@ -34,18 +34,18 @@
 
         <div id="loading-indicator" class="text-center p-4">
             <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-christmas-green inline-block"></div>
-            <p class="mt-2 text-christmas-green">Initializing application...</p>
+            <p class="mt-2 text-christmas-green">Resetting session...</p>
         </div>
 
         <div id="enrollment-area" class="space-y-4 p-6 bg-red-100 text-red-800 rounded-lg shadow-md hidden">
-            <h2 class="text-xl font-bold">Enrollment Required</h2>
-            <p class="text-sm">Select your name to link it to this device.</p>
+            <h2 class="text-xl font-bold">Select Your Name</h2>
+            <p class="text-sm">Identify yourself to draw a name.</p>
             <div id="enrollment-form">
                 <select id="enrollment-select" class="block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:border-red-500 focus:ring focus:ring-red-500 text-lg">
                     <option value="" disabled selected>Select Your Name</option>
                 </select>
                 <button id="enroll-button" class="mt-4 w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition duration-200 disabled:opacity-50">
-                    Enroll Account
+                    I am this person
                 </button>
             </div>
             <div id="enrollment-status" class="text-sm font-semibold mt-2 hidden"></div>
@@ -54,7 +54,7 @@
         <div id="main-content" class="space-y-6 hidden">
             <div id="user-identity-area" class="bg-gray-50 p-4 rounded-lg shadow-inner text-center">
                 <h2 id="welcome-message" class="text-2xl font-bold text-christmas-green mb-1"></h2>
-                <p id="auth-status" class="text-xs mt-2 text-gray-500"></p>
+                <p class="text-xs mt-2 text-gray-400">Session ID: <span id="auth-status">...</span></p>
             </div>
 
             <div id="spin-area" class="p-6 rounded-lg border-2 border-dashed border-gold/50 text-center">
@@ -67,12 +67,12 @@
                     <div class="my-4">
                         <span id="target-name-display" class="text-6xl font-extrabold text-gold block leading-tight tracking-wider">???</span>
                     </div>
-                    <p class="text-white text-sm opacity-80">Keep the secret safe!</p>
+                    <p class="text-white text-sm opacity-80">Remember this! Use a screenshot.</p>
                 </div>
 
                 <div id="already-drawn-message" class="mt-8 p-4 bg-yellow-100 text-yellow-800 rounded-lg shadow-md hidden">
-                    <p class="font-semibold">You have already drawn your Secret Santa!</p>
-                    <p class="text-sm mt-1">Check the result box above.</p>
+                    <p class="font-semibold">This user has already drawn!</p>
+                    <p class="text-sm mt-1">For security, you cannot see the result again on a new session. Ask the admin if you forgot.</p>
                 </div>
             </div>
 
@@ -87,10 +87,11 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        // Import signOut
+        import { getAuth, signInAnonymously, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, setDoc, onSnapshot, runTransaction, updateDoc, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        setLogLevel('Debug');
+        setLogLevel('Silent'); // Reduce console noise
 
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
         
@@ -159,36 +160,38 @@
             elements.messageBox.style.display = 'none';
         }
         
-        function populateEnrollmentDropdown(enrolledNames) {
+        function populateEnrollmentDropdown() {
             elements.enrollmentSelect.innerHTML = '<option value="" disabled selected>Select Your Name</option>';
-            const enrolledValues = Object.values(enrolledNames);
             const activeParticipants = currentDrawState.active_participants || [];
-            const availableNames = activeParticipants.filter(name => !enrolledValues.includes(name));
+            const targetsAssigned = currentDrawState.targets_assigned || [];
 
-            availableNames.forEach(name => {
+            // We allow selecting any active participant who hasn't been clearly identified as 'done'
+            // OR we just list everyone and check status on click. Listing everyone is safer for UI clarity.
+            activeParticipants.forEach(name => {
                 const option = document.createElement('option');
                 option.value = name;
-                option.textContent = name;
+                // Visual cue if they already drew
+                if (targetsAssigned.includes(name)) {
+                    option.textContent = name + " (Already Drawn)";
+                    // Optional: disable them? 
+                    // option.disabled = true; 
+                } else {
+                    option.textContent = name;
+                }
                 elements.enrollmentSelect.appendChild(option);
             });
             elements.enrollButton.disabled = elements.enrollmentSelect.value === "";
-            
-            if (activeParticipants.length === 0) {
-                 showMessage("The administrator has not selected any active participants yet. Check back later!", false);
-            }
         }
 
         function updateParticipantList() {
-            const map = currentDrawState.user_name_map || {};
-            const enrolledNames = Object.values(map);
             const activeParticipants = currentDrawState.active_participants || [];
             elements.participantCount.textContent = activeParticipants.length;
 
             elements.participantList.innerHTML = activeParticipants.map(name => {
-                const isEnrolled = enrolledNames.includes(name);
-                const drawnClass = currentDrawState.targets_assigned.includes(name) ? 'bg-yellow-200 text-yellow-800' : 'bg-christmas-green/10 text-christmas-green';
-                const baseClass = isEnrolled ? drawnClass : 'bg-gray-300 text-gray-600';
-                return `<li class="px-3 py-1 ${baseClass} rounded-full text-xs font-medium">${name} ${isEnrolled ? '' : '(Pending)'}</li>`;
+                // Check if this person has drawn based on public list
+                const hasDrawn = (currentDrawState.targets_assigned || []).includes(name);
+                const drawnClass = hasDrawn ? 'bg-yellow-200 text-yellow-800' : 'bg-gray-200 text-gray-600';
+                return `<li class="px-3 py-1 ${drawnClass} rounded-full text-xs font-medium">${name} ${hasDrawn ? '✓' : ''}</li>`;
             }).join('');
         }
 
@@ -200,20 +203,29 @@
                 app = initializeApp(firebaseConfig);
                 auth = getAuth(app);
                 db = getFirestore(app);
+
+                // --- CRITICAL CHANGE ---
+                // 1. Force sign out first to clear any previous session (cookies/localstorage)
+                try { await signOut(auth); } catch(e) { /* ignore if no user */ }
+                
+                // 2. Sign in fresh. Every reload = New User ID.
                 await signInAnonymously(auth);
+                
                 userId = auth.currentUser.uid;
-                elements.authStatus.textContent = "Your Account ID: " + userId;
+                elements.authStatus.textContent = userId.substring(0, 6) + "..."; // Short ID for UI
                 elements.loading.classList.add('hidden');
+                
                 setupRealtimeListeners();
             } catch (error) {
                 console.error("Auth error:", error);
-                showMessage(`Authentication failed: ${error.message}`, true);
+                showMessage(`Initialization failed: ${error.message}`, true);
                 elements.loading.classList.add('hidden');
             }
         }
         
         function setupRealtimeListeners() {
             const publicRef = getPublicDocRef();
+            // Note: We listen to the private ref for THIS session, which is empty initially
             const privateRef = getPrivateAssignmentDocRef(userId);
 
             onSnapshot(publicRef, (docSnap) => {
@@ -223,81 +235,64 @@
                     setDoc(publicRef, initialPublicData);
                     currentDrawState = initialPublicData;
                 }
+                
                 if (!Array.isArray(currentDrawState.active_participants) || currentDrawState.active_participants.length === 0) {
                     currentDrawState.active_participants = currentDrawState.master_participants || MASTER_PARTICIPANTS;
                 }
+                
                 handlePublicStateUpdate();
-                // Re-trigger private check when public draw_id might have changed
-                getPrivateAssignmentDocRef(userId); 
             }, (error) => {
                 console.error("Public listen error:", error);
             });
             
+            // Listen for changes to MY result (after I draw)
             onSnapshot(privateRef, (docSnap) => {
                 const data = docSnap.exists() ? docSnap.data() : {};
-                handlePrivateStateUpdate(data);
-            }, (error) => {
-                console.warn("Private listen warning:", error.message);
+                if (data.target && currentDrawerName) {
+                    // Result found for this session
+                    showResult(data.target);
+                    elements.spinButton.textContent = "Drawing Complete";
+                    elements.spinButton.disabled = true;
+                }
             });
         }
         
         function handlePublicStateUpdate() {
-            const map = currentDrawState.user_name_map || {};
-            currentDrawerName = map[userId] || null;
             updateParticipantList();
 
-            if (currentDrawState.active_participants.length === 0) {
-                elements.enrollmentArea.classList.add('hidden');
-                elements.mainContent.classList.add('hidden');
-                showMessage("The admin has not started the draw yet. Please wait!", false);
-                return;
-            }
-
+            // If we have selected a name, update UI state based on that name
             if (currentDrawerName) {
                 elements.enrollmentArea.classList.add('hidden');
                 elements.mainContent.classList.remove('hidden');
-                elements.welcomeMessage.textContent = `Welcome, ${currentDrawerName}!`;
+                elements.welcomeMessage.textContent = `Hello, ${currentDrawerName}!`;
+                
+                // Check if this user has ALREADY drawn in a previous session
+                if ((currentDrawState.targets_assigned || []).includes(currentDrawerName)) {
+                    // They drew before (ID is in public list), but this is a NEW session (ID not in private doc)
+                    // We cannot show them the result because it's locked in the old session.
+                    elements.spinButton.classList.add('hidden');
+                    elements.resultBox.classList.add('hidden');
+                    elements.alreadyDrawnMessage.classList.remove('hidden');
+                } else {
+                    // Ready to draw
+                    elements.spinButton.classList.remove('hidden');
+                    elements.alreadyDrawnMessage.classList.add('hidden');
+                    elements.spinButton.disabled = false;
+                    elements.spinButton.textContent = "Start the Draw!";
+                }
             } else {
+                // No name selected yet
                 elements.enrollmentArea.classList.remove('hidden');
                 elements.mainContent.classList.add('hidden');
-                populateEnrollmentDropdown(map);
-            }
-        }
-
-        function handlePrivateStateUpdate(privateData) {
-            // Wait for public state to load to ensure we have the ID
-            if (!currentDrawState.current_draw_id) return;
-            if (!currentDrawerName) return; 
-
-            // --- CRITICAL FIX FOR RESET LOGIC ---
-            // Check if the ID stored in the user's private doc matches the active public draw ID.
-            // If they don't match, it means the Admin reset the game, so this private data is OLD/INVALID.
-            const isDataValid = privateData.draw_id === currentDrawState.current_draw_id;
-            const target = isDataValid ? privateData.target : null;
-            
-            if (target) {
-                showResult(target);
-                elements.alreadyDrawnMessage.classList.remove('hidden');
-                elements.spinButton.textContent = "Drawing Complete";
-                elements.spinButton.disabled = true;
-            } else {
-                // If valid draw not found, reset UI to allow drawing
-                elements.resultBox.classList.add('hidden');
-                elements.targetNameDisplay.textContent = '???';
-                elements.alreadyDrawnMessage.classList.add('hidden');
-                
-                elements.spinButton.textContent = "Draw Your Secret Santa!";
-                const isUserActive = currentDrawState.active_participants.includes(currentDrawerName);
-                elements.spinButton.disabled = !currentDrawerName || !isUserActive;
-                
-                if (isUserActive) hideMessage();
-                else showMessage("You are not in the active draw pool.", true);
+                populateEnrollmentDropdown();
             }
         }
 
         function showResult(targetName) {
             elements.targetNameDisplay.textContent = targetName;
             elements.resultBox.classList.remove('hidden');
+            // Hide spin button to clean up UI
+            elements.spinButton.classList.add('hidden');
         }
         
         elements.enrollmentSelect.addEventListener('change', () => {
@@ -306,41 +301,37 @@
 
         elements.enrollButton.addEventListener('click', async () => {
             const selectedName = elements.enrollmentSelect.value;
-            if (!selectedName || !userId) {
-                showMessage("Please select a name.", true);
-                return;
-            }
+            if (!selectedName || !userId) return;
+
             elements.enrollButton.disabled = true;
             elements.enrollmentStatus.classList.remove('hidden');
-            elements.enrollmentStatus.textContent = `Enrolling ${selectedName}...`;
+            elements.enrollmentStatus.textContent = `Connecting as ${selectedName}...`;
 
             try {
-                if (!currentDrawState.active_participants.includes(selectedName)) {
-                     throw new Error("This user is not active in the draw pool.");
-                }
+                // Update the global map to point "Arjun" to THIS new session ID
+                // This "steals" the identity from any previous browser session
                 const publicRef = getPublicDocRef();
+                
+                // We don't strictly NEED to update the map for the logic to work if we only check active_participants,
+                // but we do it to keep the "one device per user" logic somewhat consistent.
                 await updateDoc(publicRef, { 
-                    user_name_map: {
-                        ...currentDrawState.user_name_map,
-                        [userId]: selectedName
-                    }
+                    [`user_name_map.${userId}`]: selectedName
                 });
-                showMessage(`Successfully enrolled as ${selectedName}!`, false);
+
+                currentDrawerName = selectedName;
+                handlePublicStateUpdate(); // Refresh UI
+                
             } catch (error) {
                 console.error("Enrollment failed:", error);
-                showMessage(`Enrollment failed: ${error.message}`, true);
-            } finally {
+                showMessage(`Error: ${error.message}`, true);
                 elements.enrollButton.disabled = false;
+            } finally {
                 elements.enrollmentStatus.classList.add('hidden');
             }
         });
 
         async function spinAndAssign() {
-            const drawerName = currentDrawerName;
-            if (!drawerName || !currentDrawState.active_participants.includes(drawerName)) {
-                showMessage("You are not authorized for the draw.", true);
-                return;
-            }
+            if (!currentDrawerName) return;
 
             elements.spinButton.disabled = true;
             hideMessage();
@@ -351,42 +342,37 @@
             try {
                 const targetName = await runTransaction(db, async (transaction) => {
                     const publicSnap = await transaction.get(publicRef);
-                    const privateSnap = await transaction.get(privateRef);
-                    
-                    if (!publicSnap.exists()) throw new Error("Draw data missing.");
+                    if (!publicSnap.exists()) throw new Error("System error: No data.");
                     
                     const publicData = publicSnap.data();
-                    const currentDrawId = publicData.current_draw_id;
-
-                    // Transactional check: ensure user hasn't already drawn in THIS VERSION
-                    const privateData = privateSnap.exists() ? privateSnap.data() : {};
-                    if (privateData.target && privateData.draw_id === currentDrawId) {
-                        throw new Error("You have already drawn your target.");
+                    const targetsAssigned = publicData.targets_assigned || [];
+                    
+                    // Double check inside transaction
+                    if (targetsAssigned.includes(currentDrawerName)) {
+                        throw new Error("You have already drawn!");
                     }
 
-                    const targetsAssigned = publicData.targets_assigned || [];
-                    const currentActiveParticipants = publicData.active_participants || [];
-
-                    const availableTargets = currentActiveParticipants.filter(
-                        name => name !== drawerName && !targetsAssigned.includes(name)
+                    const availableTargets = (publicData.active_participants || []).filter(
+                        name => name !== currentDrawerName && !targetsAssigned.includes(name)
                     );
 
                     if (availableTargets.length === 0) {
-                        throw new Error("Assignment pool is empty.");
+                        throw new Error("No one left to draw! Contact Admin.");
                     }
 
                     const randomIndex = Math.floor(Math.random() * availableTargets.length);
                     const newTargetName = availableTargets[randomIndex];
                     
+                    // 1. Add drawer to "done" list
                     transaction.update(publicRef, {
                         targets_assigned: [...targetsAssigned, newTargetName],
                     });
                     
-                    // Save the target AND the current_draw_id to the private doc
+                    // 2. Save secret result to THIS user's private doc
                     transaction.set(privateRef, { 
                         target: newTargetName,
-                        drawer: drawerName,
-                        draw_id: currentDrawId, // Stamp with version
+                        drawer: currentDrawerName,
+                        draw_id: publicData.current_draw_id,
                         drawn_at: Date.now()
                     });
 
@@ -397,7 +383,7 @@
 
             } catch (error) {
                 console.error("Transaction failed:", error);
-                showMessage(`Failed: ${error.message}`, true);
+                showMessage(error.message, true);
                 elements.spinButton.disabled = false;
             }
         }
@@ -409,10 +395,11 @@
             elements.resultBox.classList.remove('hidden');
             elements.spinButton.textContent = "Drawing...";
             elements.targetNameDisplay.classList.add('spinning');
+            
             const start = Date.now();
             const interval = setInterval(() => {
                 const elapsed = Date.now() - start;
-                if (elapsed < 3000) {
+                if (elapsed < 2500) {
                     const randomIndex = Math.floor(Math.random() * animationNames.length);
                     elements.targetNameDisplay.textContent = animationNames[randomIndex];
                 } else {
@@ -420,7 +407,7 @@
                     elements.targetNameDisplay.classList.remove('spinning');
                     showResult(targetName);
                 }
-            }, 100);
+            }, 80);
         }
         
         elements.spinButton.addEventListener('click', spinAndAssign);
