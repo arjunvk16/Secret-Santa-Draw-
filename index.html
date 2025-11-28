@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Secret Santa 2024</title>
+    <title>Secret Santa 2025</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
     <style>
@@ -112,7 +112,7 @@
         };
 
         const MASTER_LIST = ["Arjun", "Alvin", "Shany", "Adarsh", "Gokul", "Vismaya", "Amal", "Aswin", "Ambady"];
-        const APP_ID = 'santa_v3_vanish';
+        const APP_ID = 'santa_v4_fixed'; // Updated ID to force fresh start
 
         // 2. Init
         const app = initializeApp(firebaseConfig);
@@ -136,17 +136,27 @@
             status: document.getElementById('connection-status')
         };
 
-        // 3. Logic: Derangement Shuffle
+        // 3. Logic: Derangement Shuffle (Guarantees no self-matches)
         function getDerangement(list) {
             let shuffled = [...list];
             let isValid = false;
-            while (!isValid) {
+            
+            // Limit attempts to prevent infinite loop (though unlikely with >1 items)
+            let attempts = 0;
+            
+            while (!isValid && attempts < 1000) {
+                attempts++;
+                // Fisher-Yates shuffle
                 for (let i = shuffled.length - 1; i > 0; i--) {
                     const j = Math.floor(Math.random() * (i + 1));
                     [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
                 }
+                
+                // Check if any item matches its original position
                 isValid = list.every((val, index) => val !== shuffled[index]);
             }
+            
+            if (!isValid) throw new Error("Failed to generate valid pairs. Try again.");
             return shuffled;
         }
 
@@ -179,7 +189,8 @@
             els.reveal.classList.add('hidden');
             els.checkList.innerHTML = '';
             
-            MASTER_LIST.forEach(name => {
+            // Sort Master List alphabetically for display
+            MASTER_LIST.sort().forEach(name => {
                 const div = document.createElement('div');
                 div.className = 'flex items-center p-2 hover:bg-gray-100 rounded cursor-pointer';
                 div.innerHTML = `
@@ -203,7 +214,6 @@
                 return;
             }
 
-            // Important: If we are in the "Result" view, don't mess with UI.
             if (!els.stepResult.classList.contains('hidden')) return;
 
             els.stepIdentify.classList.remove('hidden');
@@ -222,7 +232,7 @@
             els.startBtn.disabled = true;
             els.startBtn.textContent = "Shuffling...";
 
-            const selected = Array.from(document.querySelectorAll('#participants-checks input:checked')).map(cb => cb.value);
+            let selected = Array.from(document.querySelectorAll('#participants-checks input:checked')).map(cb => cb.value);
             
             if (selected.length < 2) {
                 alert("Need at least 2 people!");
@@ -230,23 +240,45 @@
                 return;
             }
 
-            const targets = getDerangement(selected);
-            const batch = writeBatch(db);
-            
-            const publicRef = doc(db, 'artifacts', APP_ID, 'public', 'state');
-            batch.set(publicRef, {
-                status: 'STARTED',
-                participants: selected.sort(),
-                revealed: [],
-                startedAt: Date.now()
-            });
+            try {
+                // FIX: SORT FIRST
+                // We must sort the list BEFORE generating assignments, 
+                // so the indexes align perfectly when saving.
+                selected.sort(); 
 
-            selected.forEach((drawer, index) => {
-                const secretRef = doc(db, 'artifacts', APP_ID, 'assignments', drawer);
-                batch.set(secretRef, { target: targets[index] });
-            });
+                const targets = getDerangement(selected);
 
-            await batch.commit();
+                // FINAL SAFETY CHECK
+                // We explicitly check the final arrays before saving
+                for(let i=0; i<selected.length; i++) {
+                    if (selected[i] === targets[i]) {
+                        throw new Error("Self-match detected during verification. Restarting shuffle.");
+                    }
+                }
+
+                const batch = writeBatch(db);
+                
+                const publicRef = doc(db, 'artifacts', APP_ID, 'public', 'state');
+                batch.set(publicRef, {
+                    status: 'STARTED',
+                    participants: selected, // Already sorted
+                    revealed: [],
+                    startedAt: Date.now()
+                });
+
+                selected.forEach((drawer, index) => {
+                    const secretRef = doc(db, 'artifacts', APP_ID, 'assignments', drawer);
+                    batch.set(secretRef, { target: targets[index] });
+                });
+
+                await batch.commit();
+
+            } catch(e) {
+                console.error(e);
+                alert("Shuffle failed: " + e.message + " - Please try again.");
+                els.startBtn.disabled = false;
+                els.startBtn.textContent = "Shuffle & Start Game 🎲";
+            }
         }
 
         els.startBtn.addEventListener('click', startGame);
